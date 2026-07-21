@@ -2,6 +2,10 @@
 
 A working MVP of a customizable wheel-of-fortune library for React, plus an interactive playground for exploring the API.
 
+## Live demo
+
+Explore the interactive playground at [customizablewheel.netlify.app](https://customizablewheel.netlify.app/).
+
 ## Run the playground
 
 ```bash
