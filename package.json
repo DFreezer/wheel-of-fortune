@@ -1,9 +1,17 @@
 {
-  "name": "@wheel-of-fortune/react",
+  "name": "@cxde/wheel-of-fortune",
   "version": "0.1.0",
   "type": "module",
   "description": "Highly customizable and performant wheel of fortune component for React",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DFreezer/wheel-of-fortune.git"
+  },
+  "homepage": "https://github.com/DFreezer/wheel-of-fortune#readme",
+  "bugs": {
+    "url": "https://github.com/DFreezer/wheel-of-fortune/issues"
+  },
   "engines": {
     "node": ">=18"
   },

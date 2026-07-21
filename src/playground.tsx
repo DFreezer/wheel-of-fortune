@@ -51,7 +51,7 @@ const spinPresetAnimations = {
   bounce: { rotations: { min: 5, max: 6 }, easing: 'cubic-bezier(0.16, 1.12, 0.34, 1)' },
 } as const satisfies Record<string, Omit<SpinAnimationConfig, 'duration'>>;
 
-const npmInstallCommand = 'npm install @wheel-of-fortune/react';
+const npmInstallCommand = 'npm install @cxde/wheel-of-fortune';
 
 type SpinPreset = keyof typeof spinPresetAnimations;
 type FrameMode = 'classic' | 'neon' | 'cosmic' | 'realistic-space' | 'custom' | 'none';
@@ -1050,7 +1050,7 @@ export function Playground() {
       <nav className="siteNav" aria-label="Primary navigation">
         <a className="brand" href="#top" aria-label="Wheel of Fortune React home">
           <span className="brandMark" aria-hidden="true"><span /></span>
-          <span>@wheel-of-fortune/react</span>
+          <span>@cxde/wheel-of-fortune</span>
         </a>
         <div className="navLinks">
           <a href="#quick-start">{copy.landing.navQuickStart}</a>
@@ -1100,8 +1100,8 @@ export function Playground() {
           </div>
           <div className="codeStep">
             <span>{copy.landing.useStep}</span>
-            <pre><code>{`import { Wheel, useWheel } from '@wheel-of-fortune/react';
-import '@wheel-of-fortune/react/style.css';
+            <pre><code>{`import { Wheel, useWheel } from '@cxde/wheel-of-fortune';
+import '@cxde/wheel-of-fortune/style.css';
 
 const items = [
   { id: 'gift', label: 'Gift', weight: 1 },
@@ -1440,7 +1440,7 @@ function PrizeWheel() {
       <footer className="siteFooter">
         <a className="brand" href="#top">
           <span className="brandMark" aria-hidden="true"><span /></span>
-          <span>@wheel-of-fortune/react</span>
+          <span>@cxde/wheel-of-fortune</span>
         </a>
         <span>React 18+ · TypeScript · SVG / Canvas</span>
         <a href="#top" aria-label="Back to top">↑</a>

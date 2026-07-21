@@ -18,13 +18,13 @@ npm run build
 ## Install the library
 
 ```bash
-npm install @wheel-of-fortune/react
+npm install @cxde/wheel-of-fortune
 ```
 
 Import the stylesheet once from your application entry point:
 
 ```tsx
-import '@wheel-of-fortune/react/style.css';
+import '@cxde/wheel-of-fortune/style.css';
 ```
 
 The geometry and winner-selection checks run without an additional test runner:
@@ -57,8 +57,8 @@ npm test
 
 ```tsx
 import { useState } from 'react';
-import { Wheel, useWheel, type WheelItem } from '@wheel-of-fortune/react';
-import '@wheel-of-fortune/react/style.css';
+import { Wheel, useWheel, type WheelItem } from '@cxde/wheel-of-fortune';
+import '@cxde/wheel-of-fortune/style.css';
 
 function PrizeWheel() {
   const wheel = useWheel();
