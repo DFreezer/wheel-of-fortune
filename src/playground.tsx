@@ -1450,7 +1450,7 @@ function PrizeWheel() {
           <span className="brandMark" aria-hidden="true"><span /></span>
           <span>@cxde/wheel-of-fortune</span>
         </a>
-        <span>React 18+ · TypeScript · SVG / Canvas</span>
+        <a className="developerLink" href="https://www.twitch.tv/codehilation" target="_blank" rel="noreferrer">Developed by codehilation</a>
         <a href="#top" aria-label="Back to top">↑</a>
       </footer>
     </main>
