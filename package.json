@@ -1,0 +1,59 @@
+{
+  "name": "@wheel-of-fortune/react",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Highly customizable and performant wheel of fortune component for React",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "react",
+    "wheel-of-fortune",
+    "prize-wheel",
+    "roulette",
+    "spinner"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:lib && npm run build:playground",
+    "build:lib": "vite build && tsc -p tsconfig.lib.json",
+    "build:playground": "tsc -p tsconfig.app.json && vite build --config vite.playground.config.ts",
+    "test": "node --test tests/*.test.ts",
+    "preview": "vite preview",
+    "prepublishOnly": "npm test && npm run build:lib"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}
