@@ -51,6 +51,8 @@ const spinPresetAnimations = {
   bounce: { rotations: { min: 5, max: 6 }, easing: 'cubic-bezier(0.16, 1.12, 0.34, 1)' },
 } as const satisfies Record<string, Omit<SpinAnimationConfig, 'duration'>>;
 
+const npmInstallCommand = 'npm install @wheel-of-fortune/react';
+
 type SpinPreset = keyof typeof spinPresetAnimations;
 type FrameMode = 'classic' | 'neon' | 'cosmic' | 'realistic-space' | 'custom' | 'none';
 type CenterMode = 'cap' | 'gem' | 'neon' | 'cosmic' | 'realistic-space' | 'custom' | 'none';
@@ -78,7 +80,36 @@ const translations = {
     },
     itemEditor: { color: 'Sector color', name: 'Sector name', weight: 'weight', configure: 'Configure text for', configureTitle: 'Configure sector', remove: 'Remove', untitled: 'untitled sector' },
     media: { file: 'File', placeholder: 'https://… / GIF / WebM', soundPlaceholder: 'URL (optional)', remove: 'Remove', customFrame: 'Custom frame', centerImage: 'Center image' },
-    hero: { title: 'Build a wheel', titleHighlight: 'in real time.', copy: 'Test themes, per-sector typography, custom frames or center media, plus different transitions and spin curves.', compositor: 'One animated<br />compositor layer' },
+    hero: {
+      badge: 'Production-ready React component',
+      title: 'The wheel that',
+      titleHighlight: 'earns attention.',
+      copy: 'A deeply customizable prize wheel for React. Smooth on high-refresh displays, deterministic when your server decides the winner, and expressive down to every sector.',
+      openPlayground: 'Open playground',
+      copyInstall: 'Copy install',
+      copied: 'Copied!',
+      compositor: 'One animated<br />compositor layer',
+    },
+    landing: {
+      navQuickStart: 'Quick start',
+      navPlayground: 'Playground',
+      version: 'v0.1.0',
+      quickStart: 'Quick start',
+      quickIntro: 'Install, import, spin. Everything else is optional.',
+      installStep: 'Install package',
+      useStep: 'Render your first wheel',
+      codeFile: 'quick-start.tsx',
+      instruction: 'Pass a controlled items array. Use the controller only when you need to start or cancel spins imperatively.',
+      labEyebrow: 'Interactive lab',
+      labTitle: 'Tune every detail. See every change.',
+      labCopy: 'Switch renderers, edit sectors, upload media and sounds, then test client- or server-controlled outcomes without leaving the page.',
+      features: [
+        { value: '60+', label: 'high-refresh FPS' },
+        { value: '1–1000+', label: 'weighted sectors' },
+        { value: 'SVG / Canvas', label: 'adaptive rendering' },
+        { value: 'Client / Server', label: 'winner control' },
+      ],
+    },
     settings: { title: 'Wheel settings', groups: 'Settings groups' },
     stage: { preview: 'Wheel preview', result: 'Result', lastTick: 'Last tick', underCursor: 'Under cursor', sectors: (count: number) => `${count} sectors`, weight: 'weight' },
     spin: { title: 'Spin', spinning: 'Wheel is spinning…', random: 'Spin randomly', server: 'Spin with server result', cancel: 'Cancel spin / request', serverWinner: 'Server winner', landing: 'Landing position', center: 'Sector center', randomInside: 'Random inside', preset: 'Spin preset', rotations: 'rotations', duration: 'Duration', seconds: 's', async: 'Resolve winner through async resolver (1.2s demo)' },
@@ -105,7 +136,36 @@ const translations = {
     },
     itemEditor: { color: 'Колір сектора', name: 'Назва сектора', weight: 'вага', configure: 'Налаштувати текст для', configureTitle: 'Налаштувати сектор', remove: 'Видалити', untitled: 'сектор без назви' },
     media: { file: 'Файл', placeholder: 'https://… / GIF / WebM', soundPlaceholder: 'URL (необов’язково)', remove: 'Прибрати', customFrame: 'Власна рамка', centerImage: 'Центральне зображення' },
-    hero: { title: 'Створюйте колесо', titleHighlight: 'у реальному часі.', copy: 'Перевіряйте теми, типографіку окремих секторів, власні рамки або медіа в центрі, а також різні переходи й криві обертання.', compositor: 'Один анімований<br />compositor-шар' },
+    hero: {
+      badge: 'Готовий до production React-компонент',
+      title: 'Колесо, яке',
+      titleHighlight: 'привертає увагу.',
+      copy: 'Глибоко кастомізоване колесо призів для React. Плавне на високочастотних дисплеях, передбачуване, коли переможця визначає сервер, і виразне до найменшого сектора.',
+      openPlayground: 'Відкрити playground',
+      copyInstall: 'Копіювати команду',
+      copied: 'Скопійовано!',
+      compositor: 'Один анімований<br />compositor-шар',
+    },
+    landing: {
+      navQuickStart: 'Швидкий старт',
+      navPlayground: 'Playground',
+      version: 'v0.1.0',
+      quickStart: 'Швидкий старт',
+      quickIntro: 'Встановіть, імпортуйте, обертайте. Решта — за потреби.',
+      installStep: 'Встановіть пакет',
+      useStep: 'Створіть перше колесо',
+      codeFile: 'quick-start.tsx',
+      instruction: 'Передайте керований масив items. Controller потрібен лише для імперативного запуску або скасування обертання.',
+      labEyebrow: 'Інтерактивна лабораторія',
+      labTitle: 'Налаштовуйте кожну деталь. Одразу бачте результат.',
+      labCopy: 'Перемикайте renderer, редагуйте сектори, завантажуйте медіа та звуки й тестуйте client- або server-controlled результат на одній сторінці.',
+      features: [
+        { value: '60+', label: 'FPS на швидких дисплеях' },
+        { value: '1–1000+', label: 'зважених секторів' },
+        { value: 'SVG / Canvas', label: 'адаптивний рендеринг' },
+        { value: 'Client / Server', label: 'контроль переможця' },
+      ],
+    },
     settings: { title: 'Налаштування колеса', groups: 'Групи налаштувань' },
     stage: { preview: 'Попередній перегляд колеса', result: 'Результат', lastTick: 'Останній tick', underCursor: 'Під курсором', sectors: (count: number) => `${count} секторів`, weight: 'вага' },
     spin: { title: 'Прокрутка', spinning: 'Колесо обертається…', random: 'Крутити випадково', server: 'Крутити з результатом сервера', cancel: 'Скасувати прокрутку / запит', serverWinner: 'Переможець від сервера', landing: 'Позиція зупинки', center: 'Центр сектора', randomInside: 'Випадково всередині', preset: 'Пресет обертання', rotations: 'обертів', duration: 'Тривалість', seconds: 'с', async: 'Отримувати winner через async resolver (демо 1,2 с)' },
@@ -743,6 +803,7 @@ function SoundPicker({
 export function Playground() {
   const wheel = useWheel();
   const [locale, setLocale] = useState<Locale>('en');
+  const [installCopied, setInstallCopied] = useState(false);
   const copy = translations[locale];
   const [activePanel, setActivePanel] = useState<SettingsPanel>('spin');
   const [items, setItems] = useState<WheelItem[]>(initialItems);
@@ -947,6 +1008,23 @@ export function Playground() {
     }
   };
 
+  const copyInstallCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(npmInstallCommand);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = npmInstallCommand;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    setInstallCopied(true);
+    window.setTimeout(() => setInstallCopied(false), 1800);
+  };
+
   const overlay = frameMode === 'classic' ? <FrameOverlay />
     : frameMode === 'neon' ? <NeonFrameOverlay />
       : frameMode === 'cosmic' ? <CosmicFrameOverlay />
@@ -967,21 +1045,103 @@ export function Playground() {
 
   return (
     <main className="playground">
-      <header className="hero">
-        <div>
-          <p className="eyebrow">@wheel-of-fortune/react · playground</p>
-          <h1>{copy.hero.title}<br /><span>{copy.hero.titleHighlight}</span></h1>
-          <p className="heroCopy">{copy.hero.copy}</p>
-        </div>
-        <div className="heroTools">
+      <div className="ambient ambient--one" aria-hidden="true" />
+      <div className="ambient ambient--two" aria-hidden="true" />
+      <nav className="siteNav" aria-label="Primary navigation">
+        <a className="brand" href="#top" aria-label="Wheel of Fortune React home">
+          <span className="brandMark" aria-hidden="true"><span /></span>
+          <span>@wheel-of-fortune/react</span>
+        </a>
+        <div className="navLinks">
+          <a href="#quick-start">{copy.landing.navQuickStart}</a>
+          <a href="#playground">{copy.landing.navPlayground}</a>
+          <span className="versionBadge">{copy.landing.version}</span>
           <div className="languageSwitch" role="group" aria-label={copy.language.label}>
-            <span>{copy.language.label}</span>
             <button className={locale === 'en' ? 'active' : ''} onClick={() => setLocale('en')} aria-pressed={locale === 'en'}>EN</button>
             <button className={locale === 'uk' ? 'active' : ''} onClick={() => setLocale('uk')} aria-pressed={locale === 'uk'}>UA</button>
           </div>
-          <div className="performanceNote"><span>60+ FPS</span><small dangerouslySetInnerHTML={{ __html: copy.hero.compositor }} /></div>
         </div>
+      </nav>
+
+      <header className="hero">
+        <div className="heroContent" id="top">
+          <p className="eyebrow"><span className="statusDot" />{copy.hero.badge}</p>
+          <h1>{copy.hero.title}<br /><span>{copy.hero.titleHighlight}</span></h1>
+          <p className="heroCopy">{copy.hero.copy}</p>
+          <div className="heroActions">
+            <a className="heroPrimary" href="#playground">{copy.hero.openPlayground}<span aria-hidden="true">↘</span></a>
+            <button className={`installButton${installCopied ? ' installButton--copied' : ''}`} onClick={() => void copyInstallCommand()}>
+              <span className="prompt" aria-hidden="true">$</span>
+              <code>{npmInstallCommand}</code>
+              <span className="copyLabel">{installCopied ? copy.hero.copied : copy.hero.copyInstall}</span>
+            </button>
+          </div>
+        </div>
+
+        <aside className="quickStartCard" id="quick-start" aria-labelledby="quick-start-title">
+          <div className="codeWindowBar">
+            <span className="windowDots" aria-hidden="true"><i /><i /><i /></span>
+            <span>{copy.landing.codeFile}</span>
+            <span>TSX</span>
+          </div>
+          <div className="quickStartHeader">
+            <div>
+              <p>01 / {copy.landing.quickStart}</p>
+              <h2 id="quick-start-title">{copy.landing.quickIntro}</h2>
+            </div>
+            <span className="quickStartIcon" aria-hidden="true">⌁</span>
+          </div>
+          <div className="installStep">
+            <span>{copy.landing.installStep}</span>
+            <button onClick={() => void copyInstallCommand()} aria-label={copy.hero.copyInstall}>
+              <code><b>$</b> {npmInstallCommand}</code>
+              <span aria-hidden="true">{installCopied ? '✓' : '⧉'}</span>
+            </button>
+          </div>
+          <div className="codeStep">
+            <span>{copy.landing.useStep}</span>
+            <pre><code>{`import { Wheel, useWheel } from '@wheel-of-fortune/react';
+import '@wheel-of-fortune/react/style.css';
+
+const items = [
+  { id: 'gift', label: 'Gift', weight: 1 },
+  { id: 'bonus', label: 'Bonus', weight: 1 },
+];
+
+function PrizeWheel() {
+  const wheel = useWheel();
+
+  return (
+    <>
+      <Wheel items={items} controller={wheel} />
+      <button onClick={() => void wheel.spin()}>
+        Spin
+      </button>
+    </>
+  );
+}`}</code></pre>
+          </div>
+          <p className="quickStartNote">{copy.landing.instruction}</p>
+        </aside>
       </header>
+
+      <section className="featureRail" aria-label="Library highlights">
+        {copy.landing.features.map((feature, index) => (
+          <div className="featureMetric" key={feature.value} style={{ '--feature-index': index } as CSSProperties}>
+            <span>{feature.value}</span>
+            <small>{feature.label}</small>
+          </div>
+        ))}
+      </section>
+
+      <section className="playgroundIntro" id="playground">
+        <div>
+          <p className="eyebrow">{copy.landing.labEyebrow}</p>
+          <h2>{copy.landing.labTitle}</h2>
+          <p>{copy.landing.labCopy}</p>
+        </div>
+        <div className="performanceNote"><span>60+ FPS</span><small dangerouslySetInnerHTML={{ __html: copy.hero.compositor }} /></div>
+      </section>
 
       <div className="playgroundGrid">
         <section className="stage" aria-label={copy.stage.preview}>
@@ -1277,6 +1437,14 @@ export function Playground() {
           {error && <p className="error" role="alert">{error}</p>}
         </aside>
       </div>
+      <footer className="siteFooter">
+        <a className="brand" href="#top">
+          <span className="brandMark" aria-hidden="true"><span /></span>
+          <span>@wheel-of-fortune/react</span>
+        </a>
+        <span>React 18+ · TypeScript · SVG / Canvas</span>
+        <a href="#top" aria-label="Back to top">↑</a>
+      </footer>
     </main>
   );
 }
