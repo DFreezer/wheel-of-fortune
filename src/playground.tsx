@@ -17,7 +17,9 @@ import {
 import './app.css';
 
 const realisticSpaceAssets = {
+  beep: new URL('./assets/realistic-space/beep.mp3', import.meta.url).href,
   earth: new URL('./assets/realistic-space/earth.webp', import.meta.url).href,
+  galaxy: new URL('./assets/realistic-space/galaxy.webp', import.meta.url).href,
   mars: new URL('./assets/realistic-space/mars.webp', import.meta.url).href,
   saturn: new URL('./assets/realistic-space/saturn.webp', import.meta.url).href,
   spacecraft: new URL('./assets/realistic-space/spacecraft.webp', import.meta.url).href,
@@ -26,13 +28,19 @@ const realisticSpaceAssets = {
 
 const palette = ['#7c3aed', '#db2777', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#be123c'];
 
+const defaultSectorImage: WheelSectorImage = {
+  src: realisticSpaceAssets.galaxy,
+  opacity: 0.24,
+  fit: 'cover',
+};
+
 const initialItems: WheelItem[] = [
-  { id: 'gift', label: 'Gift', weight: 18, color: '#7c3aed' },
-  { id: 'bonus', label: 'Bonus ×2', weight: 12, color: '#db2777' },
-  { id: 'try-again', label: 'Try again', weight: 25, color: '#ea580c' },
-  { id: 'free-shipping', label: 'Free shipping', weight: 15, color: '#ca8a04' },
-  { id: 'coupon', label: '15% discount', weight: 20, color: '#16a34a' },
-  { id: 'jackpot', label: 'Jackpot', weight: 10, color: '#0891b2', text: { fontSize: 3.9 } },
+  { id: 'gift', label: 'Gift', weight: 18, color: '#7c3aed', image: defaultSectorImage },
+  { id: 'bonus', label: 'Bonus ×2', weight: 12, color: '#db2777', image: defaultSectorImage },
+  { id: 'try-again', label: 'Try again', weight: 25, color: '#ea580c', image: defaultSectorImage },
+  { id: 'free-shipping', label: 'Free shipping', weight: 15, color: '#ca8a04', image: defaultSectorImage },
+  { id: 'coupon', label: '15% discount', weight: 20, color: '#16a34a', image: defaultSectorImage },
+  { id: 'jackpot', label: 'Jackpot', weight: 10, color: '#0891b2', image: defaultSectorImage, text: { fontSize: 3.9 } },
 ];
 
 const localizedSeedLabels = {
@@ -211,10 +219,10 @@ const defaultThemeSettings: ThemeSettings = {
   background: '#172033',
   borderColor: '#f8fafc',
   borderWidth: 0.85,
-  dividerColor: '#ffffff',
+  dividerColor: '#000000',
   dividerWidth: 0.45,
-  dividerShadowColor: '#020617',
-  dividerShadowBlur: 0,
+  dividerShadowColor: '#000000',
+  dividerShadowBlur: 1,
   dividerShadowX: 0,
   dividerShadowY: 0,
   textColor: '#ffffff',
@@ -230,7 +238,7 @@ const defaultThemeSettings: ThemeSettings = {
   textRadius: 0.68,
   textOffsetX: 0,
   textOffsetY: 0,
-  orientation: 'tangential',
+  orientation: 'radial',
   align: 'middle',
   overflow: 'ellipsis',
 };
@@ -820,10 +828,10 @@ export function Playground() {
   const [centerMode, setCenterMode] = useState<CenterMode>('realistic-space');
   const [centerUrl, setCenterUrl] = useState('');
   const [centerSize, setCenterSize] = useState(25);
-  const [idleEnabled, setIdleEnabled] = useState(false);
-  const [idleDuration, setIdleDuration] = useState(2800);
-  const [idleRotation, setIdleRotation] = useState(0.65);
-  const [idleScale, setIdleScale] = useState(1.01);
+  const [idleEnabled, setIdleEnabled] = useState(true);
+  const [idleDuration, setIdleDuration] = useState(8000);
+  const [idleRotation, setIdleRotation] = useState(4);
+  const [idleScale, setIdleScale] = useState(1);
   const [pointerMode, setPointerMode] = useState<PointerMode>('realistic-space');
   const [pointerPosition, setPointerPosition] = useState<WheelPointerPosition>('top');
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
@@ -831,13 +839,13 @@ export function Playground() {
   const [lastResult, setLastResult] = useState<string | null>(null);
   const [lastPass, setLastPass] = useState('—');
   const [error, setError] = useState<string | null>(null);
-  const [tickUrl, setTickUrl] = useState('');
+  const [tickUrl, setTickUrl] = useState(realisticSpaceAssets.beep);
   const [spinUrl, setSpinUrl] = useState('');
   const [winUrl, setWinUrl] = useState('');
   const [tickFile, setTickFile] = useState<File>();
   const [spinFile, setSpinFile] = useState<File>();
   const [winFile, setWinFile] = useState<File>();
-  const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [asyncServer, setAsyncServer] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
   const [hoveredItemId, setHoveredItemId] = useState<string | undefined>();

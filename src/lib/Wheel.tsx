@@ -39,7 +39,7 @@ const DEFAULT_TEXT: SectorTextStyle = {
   radius: 0.66,
   offsetX: 0,
   offsetY: 0,
-  orientation: 'tangential',
+  orientation: 'radial',
   align: 'middle',
   overflow: 'ellipsis',
   strokeColor: 'transparent',
@@ -52,7 +52,7 @@ const DEFAULT_THEME: WheelTheme = {
   sector: { colors: ['#7c3aed', '#db2777', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb'] },
   text: DEFAULT_TEXT,
   border: { color: 'rgba(255, 255, 255, 0.72)', width: 0.7, shadow: { color: 'transparent', blur: 0, offsetX: 0, offsetY: 0 } },
-  dividers: { color: 'rgba(255, 255, 255, 0.48)', width: 0.45, shadow: { color: 'rgba(0, 0, 0, 0.38)', blur: 0, offsetX: 0, offsetY: 0 } },
+  dividers: { color: '#000000', width: 0.45, shadow: { color: '#000000', blur: 1, offsetX: 0, offsetY: 0 } },
 };
 
 const DEFAULT_SPIN: SpinAnimationConfig = {
