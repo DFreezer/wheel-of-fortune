@@ -1,6 +1,6 @@
 {
   "name": "@cxde/wheel-of-fortune",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Highly customizable and performant wheel of fortune component for React",
   "license": "MIT",
