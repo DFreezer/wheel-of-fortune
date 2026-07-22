@@ -1,5 +1,13 @@
 # React Wheel of Fortune
 
+<p align="center">
+  <img
+    src="https://raw.githubusercontent.com/DFreezer/wheel-of-fortune/main/src/assets/realistic-space/wheel.png"
+    alt="Wheel of Fortune preview"
+    width="520"
+  />
+</p>
+
 A working MVP of a customizable wheel-of-fortune library for React, plus an interactive playground for exploring the API.
 
 ## Live demo
