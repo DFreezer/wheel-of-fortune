@@ -96,8 +96,8 @@ function colorAt<T>(sector: Sector<T>, theme: WheelTheme): string {
   return sector.item.color ?? theme.sector.colors[sector.index % theme.sector.colors.length] ?? theme.background;
 }
 
-function shouldShowSvgLabel<T>(sector: Sector<T>, text: SectorTextStyle, minLabelAngle: number): boolean {
-  return sector.angle >= minLabelAngle && text.overflow !== 'hide';
+function shouldShowSvgLabel<T>(sector: Sector<T>, minLabelAngle: number): boolean {
+  return sector.angle >= minLabelAngle;
 }
 
 let measureContext: CanvasRenderingContext2D | null | undefined;
@@ -149,7 +149,7 @@ export function WheelSvgRenderer<T>({ sectors, theme, minLabelAngle, highlighted
         const anchor = text.align === 'start' ? 'start' : text.align === 'end' ? 'end' : 'middle';
         const image = sectorImage(sector.item);
         const clipId = `wheel-sector-${rendererId}-${sector.index}-${sector.item.id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
-        const fittedLabel = shouldShowSvgLabel(sector, text, minLabelAngle) ? fitSvgLabel(text, sector) : null;
+        const fittedLabel = shouldShowSvgLabel(sector, minLabelAngle) ? fitSvgLabel(text, sector) : null;
         const labelShadow = cssShadow(text.shadow);
         return (
           <g key={sector.item.id} className={['wheel__sector', sector.item.id === highlightedItemId && 'wheel__sector--highlighted'].filter(Boolean).join(' ')}>
@@ -375,7 +375,9 @@ export function WheelCanvasRenderer<T>({ sectors, theme, minLabelAngle, highligh
 
     for (const sector of sectors) {
       const text = { ...theme.text, ...sector.item.text };
-      if (sector.angle < minLabelAngle && text.overflow === 'hide') continue;
+      // Keep Canvas in sync with SVG: a sector below the legibility threshold
+      // never renders a label, regardless of its overflow strategy.
+      if (sector.angle < minLabelAngle) continue;
       const fontSize = canvasFontSize(text.fontSize, dimension);
       const mid = sector.start + sector.angle / 2;
       const labelPositionRadius = labelRadius(text, radius);
