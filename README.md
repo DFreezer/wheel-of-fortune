@@ -53,15 +53,15 @@ npm test
 - client-side weighted selection using `crypto.getRandomValues`, server-side selection through `winnerId`, and an asynchronous `resolveWinner` with `AbortSignal`;
 - landing at the center or at a random point inside the winning sector with safe edge padding;
 - Web Animations API spin with a single rotating layer, no React render on every frame, custom CSS `easing`, duration, and rotation count;
-- pointer bounce animation, sector-pass events, and pointer placement at the top or right (`pointerPosition`);
+- CSS-backed pointer bounce, rate-limited sector-pass events, Web Audio tick playback, and pointer placement at the top or right (`pointerPosition`);
 - `overlay`, `center`, and `pointer` as `ReactNode`, supporting `<img>`, inline SVG, GIF, and `<video>`; `centerSize` controls the center slot size;
 - responsive sizing through `size`, including values such as `"50%"` inside a container;
 - `spin`/`tick`/`win` sounds from a URL or a local `File`/`Blob`;
-- a controlled `items` list: add and remove items by updating React state, with `crossfade`, geometric `collapse`, or no animation while idle;
+- a controlled `items` list: add and remove items by updating React state, with `crossfade`, Canvas LOD `collapse`, or no animation while idle;
 - optional idle animation (subtle tilt and pulse) on a compositor layer; the pointer reacts to sector-boundary crossings through the same bounce/tick event;
-- `renderer="auto"`: SVG for up to 299 sectors and Canvas from 300; Canvas caps DPR and hides labels/dividers that would no longer be readable;
-- explicit `renderer="svg"` and `renderer="canvas"` modes, plus `canvasThreshold` and `maxCanvasDpr`;
-- geometric hit testing, hover, click, and controlled visual highlighting (`onSectorHover`, `onSectorClick`, `highlightedItemId`) in both renderers;
+- Canvas is the only wheel renderer; it caps DPR and hides labels/dividers that would no longer be readable;
+- geometric hit testing, hover, click, and controlled visual highlighting (`onSectorHover`, `onSectorClick`, `highlightedItemId`, `highlightStyle`);
+- a visually hidden semantic item list is emitted by default for assistive technology; set `accessibleItemList={false}` when the application provides its own external list;
 - `WheelMedia` for quickly connecting image/GIF/WebM content to `overlay`, `center`, and `pointer`;
 - `prefers-reduced-motion`: spin and transitions are shortened, and the winner is announced through a live region.
 
@@ -89,8 +89,6 @@ function PrizeWheel() {
         controller={wheel}
         items={items}
         size="100%"
-        renderer="auto"
-        canvasThreshold={300}
         itemsTransition={{ mode: 'collapse', duration: 360, easing: 'cubic-bezier(.22, 1, .36, 1)' }}
         spinAnimation={{
           duration: 4200,
@@ -128,12 +126,11 @@ await wheel.spin({
 });
 ```
 
-For dense wheels, SVG and Canvas expose the same sector events. `highlightedItemId` provides controlled highlighting without relying on individual DOM nodes:
+For dense wheels, Canvas exposes the same geometric sector events. `highlightedItemId` provides controlled highlighting without relying on individual DOM nodes:
 
 ```tsx
 <Wheel
   items={items}
-  renderer="auto"
   highlightedItemId={hoveredId}
   onSectorHover={(sector) => setHoveredId(sector?.item.id)}
   onSectorClick={({ item }) => setServerWinnerId(item.id)}
@@ -142,12 +139,24 @@ For dense wheels, SVG and Canvas expose the same sector events. `highlightedItem
 
 Detailed architectural decisions and future work are documented in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
-In SVG, `collapse` interpolates sector boundary angles: a removed wedge contracts between its neighbors and an added wedge expands from the shared boundary. The wheel therefore remains continuous on every frame. Canvas/dense mode automatically falls back to a fast `crossfade` to avoid repainting hundreds of complex frames.
+Canvas `collapse` follows a level-of-detail policy without affecting weights or winner selection: 1–50 sectors redraw the full wheel at up to 60 FPS; 51–150 redraw fills, simple dividers and border at up to 30 FPS; 151+ sectors crossfade two prepared Canvas bitmaps.
+
+`highlightStyle` controls the controlled highlight layer without redrawing the base wheel:
+
+```tsx
+<Wheel
+  items={items}
+  highlightedItemId={hoveredId}
+  highlightStyle={{ color: '#fef08a', opacity: 0.28, blendMode: 'screen' }}
+/>
+```
+
+For repeatable local performance checks, run the app and open [`/benchmark.html`](http://127.0.0.1:5173/benchmark.html). See [BENCHMARKS.md](./BENCHMARKS.md) for the scenarios and measurement rules.
+Open [`/visual-fixtures.html`](http://127.0.0.1:5173/visual-fixtures.html) to inspect the supported Canvas customisation matrix before updating visual snapshots.
 
 The sector image (`WheelItem.image`) is always rendered **above** its `color` and clipped to the sector wedge. Transparent PNG/GIF pixels therefore leave the sector color visible. The object form also accepts `opacity` and `fit`: `'cover' | 'contain' | 'stretch'`. `scale` (default `1`) scales the layer from the wheel center: values below `1` zoom out and values above `1` zoom in. `rotation` rotates the image around the center in degrees, while `offsetX` and `offsetY` move it horizontally and vertically in wheel coordinates from `0` to `100` (positive values move right and down).
 
 ## Current limitations
 
-- Geometric `collapse` is intended for regular SVG wheels. Canvas and dense collections use `crossfade` to keep frame cost predictable.
 - Hover and click are geometric; applications that need full keyboard navigation for hundreds of sectors should provide an external prize list.
 - For valuable prizes, the server should remain the source of truth: client-side mode selects locally for UI-only experiences.

@@ -107,6 +107,22 @@ export interface WheelThemeOptions {
   dividers?: StrokeStyleOptions;
 }
 
+/** Visual treatment for the controlled highlighted sector. */
+export interface WheelHighlightStyle {
+  /** CSS colour used to fill the highlighted wedge. Default: white. */
+  color: string;
+  /** Opacity from 0 to 1. Default: 0.18. */
+  opacity: number;
+  /** Optional Canvas compositing mode, for example `screen` or `multiply`. */
+  blendMode?: GlobalCompositeOperation;
+}
+
+/** Development-only drawing telemetry for reproducible performance benchmarks. */
+export interface WheelCanvasDrawEvent {
+  layer: 'base' | 'highlight' | 'transition';
+  detail: 'full' | 'transition' | 'dense';
+}
+
 export interface LandingConfig {
   mode?: 'center' | 'random';
   /** Reserved fraction at each sector edge in random mode, from 0 to < 0.5. */
@@ -173,12 +189,10 @@ export interface WheelSoundConfig {
   tickRateLimit?: number;
 }
 
-export type WheelRenderer = 'svg' | 'canvas' | 'auto';
-
 /**
  * Transition used when the controlled `items` list gains or loses sectors.
  * Crossfade is deliberately the default: it remains smooth for a large wheel
- * without creating hundreds of animated SVG paths.
+ * without animating hundreds of independent sector layers.
  */
 export interface ItemsTransitionConfig {
   enabled: boolean;
@@ -229,7 +243,7 @@ export interface WheelController {
   getState(): WheelState;
 }
 
-/** A sector identified by pointer interaction in either renderer. */
+/** A sector identified by pointer interaction on the Canvas wheel. */
 export interface WheelSectorEvent<T = unknown> {
   item: WheelItem<T>;
   index: number;
@@ -240,10 +254,6 @@ export interface WheelSectorEvent<T = unknown> {
 export interface WheelProps<T = unknown> {
   items: readonly WheelItem<T>[];
   controller?: WheelController;
-  /** `auto` uses SVG for ordinary wheels and Canvas for dense ones. */
-  renderer?: WheelRenderer;
-  /** Item count at which `renderer="auto"` switches to Canvas. */
-  canvasThreshold?: number;
   /** Upper bound for Canvas DPR. Prevents an unnecessarily large bitmap on 4K/Retina displays. */
   maxCanvasDpr?: number;
   /** Idle add/remove transition for the controlled `items` list. */
@@ -259,6 +269,8 @@ export interface WheelProps<T = unknown> {
   className?: string;
   style?: CSSProperties;
   ariaLabel?: string;
+  /** Render a visually hidden semantic list of the controlled items. Default: true. */
+  accessibleItemList?: boolean;
   theme?: WheelThemeOptions;
   pointer?: ReactNode;
   /** Edge on which the pointer is placed. Defaults to the top edge. */
@@ -272,8 +284,12 @@ export interface WheelProps<T = unknown> {
   /** Gentle wobble/pulse applied while idle. Disabled by default. */
   idleAnimation?: boolean | Partial<IdleAnimationConfig>;
   minLabelAngle?: number;
-  /** Optional visual emphasis. Works in both SVG and Canvas renderers. */
+  /** Optional visual emphasis drawn by a dedicated Canvas layer. */
   highlightedItemId?: string;
+  /** Visual treatment for `highlightedItemId`. */
+  highlightStyle?: Partial<WheelHighlightStyle>;
+  /** Receives an event after Canvas work is submitted. Intended for diagnostics and benchmarks. */
+  onCanvasDraw?: (event: WheelCanvasDrawEvent) => void;
   onSpinStart?: () => void;
   onSectorPass?: (item: WheelItem<T>) => void;
   /** Fires only when the sector under the pointer changes; `null` means outside the wheel. */

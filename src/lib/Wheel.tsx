@@ -9,9 +9,10 @@ import {
   type MouseEvent,
   type PointerEvent,
 } from 'react';
-import { createSectors, chooseWeightedSector, interpolateSectors, pointerAngleForPosition, positiveModulo, screenAngleToWheelAngle, sectorAtAngle, targetAngle, type Sector } from './geometry';
+import { createSectors, chooseWeightedSector, pointerAngleForPosition, positiveModulo, screenAngleToWheelAngle, sectorAtAngle, targetAngle, type Sector } from './geometry';
+import { resolveCanvasCollapsePolicy } from './canvasTransitionPolicy';
 import { secureRandom } from './random';
-import { WheelCanvasRenderer, WheelSvgRenderer } from './renderers';
+import { WheelCanvasRenderer, WheelCanvasTransitionRenderer } from './renderers';
 import type {
   ItemsTransitionConfig,
   IdleAnimationConfig,
@@ -88,6 +89,14 @@ interface InternalWheelController extends WheelController {
   [ATTACH]?: (host: WheelHost | null) => void;
 }
 
+interface ViewportBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  dimension: number;
+}
+
 function cssSize(size: string | number | undefined): string | undefined {
   return typeof size === 'number' ? `${size}px` : size;
 }
@@ -141,27 +150,6 @@ function randomRotations(rotations: SpinAnimationConfig['rotations']): number {
   return min + Math.floor(secureRandom() * (max - min + 1));
 }
 
-function cubicBezierProgress(progress: number, easing: string): number {
-  const values = easing.match(/cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/i)?.slice(1).map(Number);
-  if (!values || values.length !== 4 || values.some((value) => !Number.isFinite(value))) {
-    if (easing === 'linear') return progress;
-    if (easing === 'ease-in') return progress * progress;
-    if (easing === 'ease-out') return 1 - (1 - progress) ** 2;
-    return progress * progress * (3 - 2 * progress);
-  }
-  const [x1, y1, x2, y2] = values;
-  const sample = (a: number, b: number, t: number) => 3 * a * (1 - t) ** 2 * t + 3 * b * (1 - t) * t ** 2 + t ** 3;
-  let low = 0;
-  let high = 1;
-  let t = progress;
-  for (let index = 0; index < 14; index += 1) {
-    t = (low + high) / 2;
-    if (sample(x1, x2, t) < progress) low = t;
-    else high = t;
-  }
-  return sample(y1, y2, t);
-}
-
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
@@ -207,8 +195,6 @@ export function useWheel(): WheelController {
 export function Wheel<T = unknown>({
   items,
   controller,
-  renderer = 'auto',
-  canvasThreshold = 300,
   maxCanvasDpr = 2,
   itemsTransition,
   itemsChangeBehavior = 'defer',
@@ -219,6 +205,7 @@ export function Wheel<T = unknown>({
   className,
   style,
   ariaLabel = 'Wheel of fortune',
+  accessibleItemList = true,
   theme: partialTheme,
   pointer,
   pointerPosition = 'top',
@@ -230,6 +217,8 @@ export function Wheel<T = unknown>({
   idleAnimation,
   minLabelAngle = 7,
   highlightedItemId,
+  highlightStyle,
+  onCanvasDraw,
   onSpinStart,
   onSectorPass,
   onSectorHover,
@@ -250,13 +239,19 @@ export function Wheel<T = unknown>({
   const resolverAbortRef = useRef<AbortController | null>(null);
   const resolverTokenRef = useRef(0);
   const rotationRef = useRef(0);
+  const visualRotationRef = useRef(0);
   const idleFrozenAngleRef = useRef(0);
   const statusRef = useRef<WheelState['status']>('idle');
   const lastTickRef = useRef(0);
   const lastPointerAnimationRef = useRef(0);
+  const pointerBounceFrameRef = useRef<number | null>(null);
   const idlePointerSectorIdRef = useRef<string | null | undefined>(undefined);
   const hoveredItemIdRef = useRef<string | null>(null);
+  const viewportBoundsRef = useRef<ViewportBounds | null>(null);
   const soundUrlsRef = useRef<Partial<Record<'spin' | 'tick' | 'win', string>>>({});
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioBuffersRef = useRef<Partial<Record<'spin' | 'tick' | 'win', AudioBuffer>>>({});
+  const audioDecodeTokenRef = useRef(0);
   const latestPropsRef = useRef<WheelProps<T>>({ items } as WheelProps<T>);
   const latestItemsRef = useRef(items);
   const reducedMotion = usePrefersReducedMotion();
@@ -269,7 +264,6 @@ export function Wheel<T = unknown>({
     id: number;
     config: ItemsTransitionConfig;
   } | null>(null);
-  const [itemsTransitionProgress, setItemsTransitionProgress] = useState(0);
   const [idleAnimationKey, setIdleAnimationKey] = useState(0);
   // Keep the resting rotor angle in React state as well as in the ref. The
   // idle wrapper is deliberately re-keyed after a spin to restart its CSS
@@ -287,14 +281,13 @@ export function Wheel<T = unknown>({
   const resolvedIdleAnimation = useMemo(() => resolveIdleAnimation(idleAnimation), [idleKey]);
   const sectors = useMemo(() => createSectors(displayItems), [displayItems]);
   const sectorsRef = useRef(sectors);
-  const geometryCollapse = itemsTransitionState?.config.mode === 'collapse'
-    && (renderer === 'svg' || (renderer === 'auto' && Math.max(itemsTransitionState.from.length, itemsTransitionState.to.length) < Math.max(1, canvasThreshold)));
+  const canvasCollapsePolicy = itemsTransitionState?.config.mode === 'collapse'
+    ? resolveCanvasCollapsePolicy(itemsTransitionState.from.length, itemsTransitionState.to.length)
+    : null;
 
   latestPropsRef.current = {
     items,
     controller,
-    renderer,
-    canvasThreshold,
     maxCanvasDpr,
     itemsTransition,
     itemsChangeBehavior,
@@ -305,6 +298,7 @@ export function Wheel<T = unknown>({
     className,
     style,
     ariaLabel,
+    accessibleItemList,
     theme: partialTheme,
     pointer,
     pointerPosition,
@@ -316,6 +310,8 @@ export function Wheel<T = unknown>({
     idleAnimation,
     minLabelAngle,
     highlightedItemId,
+    highlightStyle,
+    onCanvasDraw,
     onSpinStart,
     onSectorPass,
     onSectorHover,
@@ -332,6 +328,42 @@ export function Wheel<T = unknown>({
   itemsTransitionRef.current = itemsTransitionState;
   sectorsRef.current = sectors;
 
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const updateBounds = () => {
+      const rect = viewport.getBoundingClientRect();
+      viewportBoundsRef.current = {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+        dimension: Math.min(rect.width, rect.height),
+      };
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(updateBounds);
+    observer?.observe(viewport);
+    window.addEventListener('resize', updateBounds);
+    window.addEventListener('scroll', updateBounds, true);
+    updateBounds();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateBounds);
+      window.removeEventListener('scroll', updateBounds, true);
+    };
+  }, []);
+
+  const getAudioContext = useCallback((): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    const browserWindow = window as typeof globalThis & { webkitAudioContext?: typeof AudioContext };
+    const AudioContextConstructor = browserWindow.AudioContext ?? browserWindow.webkitAudioContext;
+    if (!AudioContextConstructor) return null;
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      audioContextRef.current = new AudioContextConstructor();
+    }
+    return audioContextRef.current;
+  }, []);
+
   useEffect(() => {
     const objectUrls: string[] = [];
     const resolveSource = (source: WheelSoundSource | undefined): string | undefined => {
@@ -347,41 +379,79 @@ export function Wheel<T = unknown>({
       win: resolveSource(sounds?.win),
     };
     soundUrlsRef.current = urls;
+    audioBuffersRef.current = {};
+    const decodeToken = ++audioDecodeTokenRef.current;
+    const abort = new AbortController();
+    const context = Object.values(urls).some(Boolean) ? getAudioContext() : null;
+
+    const decode = async (kind: 'spin' | 'tick' | 'win', url: string | undefined) => {
+      if (!context || !url) return;
+      try {
+        const response = await fetch(url, { signal: abort.signal });
+        if (!response.ok) return;
+        const source = await response.arrayBuffer();
+        const buffer = await context.decodeAudioData(source);
+        if (!abort.signal.aborted && audioDecodeTokenRef.current === decodeToken) {
+          audioBuffersRef.current[kind] = buffer;
+        }
+      } catch {
+        // Sound is an optional enhancement. A CORS error or unsupported codec
+        // must never affect spinning or the result callback.
+      }
+    };
+    void decode('spin', urls.spin);
+    void decode('tick', urls.tick);
+    void decode('win', urls.win);
 
     return () => {
+      abort.abort();
+      audioDecodeTokenRef.current += 1;
       if (soundUrlsRef.current === urls) soundUrlsRef.current = {};
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [sounds?.spin, sounds?.tick, sounds?.win]);
+  }, [getAudioContext, sounds?.spin, sounds?.tick, sounds?.win]);
+
+  useEffect(() => () => {
+    const context = audioContextRef.current;
+    audioContextRef.current = null;
+    audioBuffersRef.current = {};
+    if (context && context.state !== 'closed') void context.close().catch(() => undefined);
+  }, []);
 
   const playSound = useCallback((kind: 'spin' | 'tick' | 'win') => {
     const sound = latestPropsRef.current.sounds;
-    const url = soundUrlsRef.current[kind];
-    if (!sound?.enabled || !url) return;
-    const audio = new Audio(url);
-    audio.volume = Math.min(Math.max(sound.volume ?? 0.5, 0), 1);
-    void audio.play().catch(() => undefined);
-  }, []);
-
-  // Positioning the pointer and animating its bounce are deliberately kept on
-  // different elements. Mixing a percentage translate with the animated
-  // rotation makes the right-hand version use a different pivot from the top
-  // version in some browsers.
-  const pointerBaseTransform = pointerPosition === 'right' ? 'rotate(90deg)' : 'rotate(0deg)';
+    const buffer = audioBuffersRef.current[kind];
+    const context = getAudioContext();
+    if (!sound?.enabled || !buffer || !context) return;
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    gain.gain.value = Math.min(Math.max(sound.volume ?? 0.5, 0), 1);
+    source.connect(gain).connect(context.destination);
+    const start = () => {
+      try {
+        source.start();
+      } catch {
+        // A source can be started only once. Ignoring a late/duplicate start
+        // preserves the visual tick without creating an HTMLAudioElement.
+      }
+    };
+    if (context.state === 'suspended') void context.resume().then(start).catch(() => undefined);
+    else start();
+  }, [getAudioContext]);
 
   const animatePointer = useCallback(() => {
     const pointerElement = pointerRef.current;
     const now = performance.now();
     if (!pointerElement || now - lastPointerAnimationRef.current < 42) return;
     lastPointerAnimationRef.current = now;
-    pointerElement.getAnimations().forEach((animation) => animation.cancel());
-    pointerElement.animate([
-      { transform: `${pointerBaseTransform} rotate(0deg)` },
-      { transform: `${pointerBaseTransform} rotate(-19deg)`, offset: 0.34 },
-      { transform: `${pointerBaseTransform} rotate(5deg)`, offset: 0.72 },
-      { transform: `${pointerBaseTransform} rotate(0deg)` },
-    ], { duration: 150, easing: 'ease-out' });
-  }, [pointerBaseTransform]);
+    if (pointerBounceFrameRef.current !== null) cancelAnimationFrame(pointerBounceFrameRef.current);
+    pointerElement.classList.remove('wheel__pointerContent--tick');
+    pointerBounceFrameRef.current = requestAnimationFrame(() => {
+      pointerElement.classList.add('wheel__pointerContent--tick');
+      pointerBounceFrameRef.current = null;
+    });
+  }, []);
 
   const notifySectorPass = useCallback((sector: Sector<T>, playTickSound = true) => {
     animatePointer();
@@ -402,7 +472,7 @@ export function Wheel<T = unknown>({
   // renders for every animation frame.
   useEffect(() => {
     idlePointerSectorIdRef.current = undefined;
-    if (!idleAnimationIsActive || status !== 'idle' || !sectors.length) return;
+    if (!onSectorPass || !idleAnimationIsActive || status !== 'idle' || !sectors.length) return;
 
     let frame = 0;
     const observe = () => {
@@ -416,7 +486,7 @@ export function Wheel<T = unknown>({
     };
     frame = requestAnimationFrame(observe);
     return () => cancelAnimationFrame(frame);
-  }, [idleAnimationIsActive, notifySectorPass, pointerAngle, sectors, status]);
+  }, [idleAnimationIsActive, notifySectorPass, onSectorPass, pointerAngle, sectors, status]);
 
   const finishItemsTransition = useCallback((notify = true) => {
     if (itemsTransitionTimerRef.current !== null) {
@@ -426,7 +496,6 @@ export function Wheel<T = unknown>({
     if (!itemsTransitionRef.current) return;
     itemsTransitionRef.current = null;
     setItemsTransitionState(null);
-    setItemsTransitionProgress(0);
     if (notify) latestPropsRef.current.onItemsTransitionEnd?.();
   }, []);
 
@@ -444,21 +513,6 @@ export function Wheel<T = unknown>({
     latestPropsRef.current.onItemsTransitionStart?.();
     itemsTransitionTimerRef.current = setTimeout(() => finishItemsTransition(), duration);
   }, [finishItemsTransition]);
-
-  useEffect(() => {
-    if (!itemsTransitionState || !geometryCollapse) return;
-    const { duration, easing } = itemsTransitionState.config;
-    let frame = 0;
-    let startedAt: number | undefined;
-    const animate = (now: number) => {
-      startedAt ??= now;
-      const progress = Math.min(1, (now - startedAt) / Math.max(1, duration));
-      setItemsTransitionProgress(cubicBezierProgress(progress, easing));
-      if (progress < 1) frame = requestAnimationFrame(animate);
-    };
-    frame = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(frame);
-  }, [geometryCollapse, itemsTransitionState]);
 
   const cancel = useCallback((reason = 'Spin cancelled') => {
     const resolverAbort = resolverAbortRef.current;
@@ -482,6 +536,7 @@ export function Wheel<T = unknown>({
     const current = rotorRef.current ? currentTransformAngle(rotorRef.current, rotationRef.current) : rotationRef.current;
     const visualRotation = current + idleFrozenAngleRef.current;
     rotationRef.current = visualRotation;
+    visualRotationRef.current = visualRotation;
     setCommittedRotation(visualRotation);
     if (rotorRef.current) rotorRef.current.style.transform = `rotate(${visualRotation}deg)`;
     idleFrozenAngleRef.current = 0;
@@ -534,6 +589,7 @@ export function Wheel<T = unknown>({
       const delta = positiveModulo(normalizedTarget - idleRotation - rotationRef.current, 360);
       const endRotation = rotationRef.current + rotations * 360 + delta;
       const startRotation = rotationRef.current;
+      visualRotationRef.current = idleRotation + startRotation;
       const rotor = rotorRef.current;
       if (!rotor || typeof rotor.animate !== 'function') throw new Error('Web Animations API is not available in this browser.');
 
@@ -555,6 +611,7 @@ export function Wheel<T = unknown>({
         const progress = animation.effect?.getComputedTiming().progress;
         if (typeof progress === 'number') {
           const angle = startRotation + (endRotation - startRotation) * progress;
+          visualRotationRef.current = idleRotation + angle;
           const currentSector = sectorAtAngle(snapshot, pointerAngle - idleRotation - angle);
           if (currentSector && currentSector.item.id !== lastSectorId) {
             lastSectorId = currentSector.item.id;
@@ -563,7 +620,7 @@ export function Wheel<T = unknown>({
         }
         rafRef.current = requestAnimationFrame(tick);
       };
-      rafRef.current = requestAnimationFrame(tick);
+      if (latestPropsRef.current.onSectorPass) rafRef.current = requestAnimationFrame(tick);
 
       return new Promise<SpinResult<T>>((resolve, reject) => {
         pendingRejectRef.current = reject;
@@ -573,6 +630,7 @@ export function Wheel<T = unknown>({
           const finalRotation = endRotation + idleFrozenAngleRef.current;
           rotor.style.transform = `rotate(${finalRotation}deg)`;
           rotationRef.current = finalRotation;
+          visualRotationRef.current = finalRotation;
           setCommittedRotation(finalRotation);
           idleFrozenAngleRef.current = 0;
           // A finished WAAPI animation with fill: forwards otherwise keeps
@@ -656,18 +714,19 @@ export function Wheel<T = unknown>({
   }, [applyItems, startSpin]);
 
   const sectorAtPointer = useCallback((clientX: number, clientY: number): WheelSectorEvent<T> | null => {
-    const viewport = viewportRef.current;
-    if (!viewport) return null;
-    const rect = viewport.getBoundingClientRect();
-    const dimension = Math.min(rect.width, rect.height);
-    const x = clientX - (rect.left + rect.width / 2);
-    const y = clientY - (rect.top + rect.height / 2);
+    const bounds = viewportBoundsRef.current;
+    if (!bounds) return null;
+    const { dimension } = bounds;
+    const x = clientX - (bounds.left + bounds.width / 2);
+    const y = clientY - (bounds.top + bounds.height / 2);
     if (!dimension || x * x + y * y > (dimension / 2) ** 2) return null;
 
     const screenAngle = (Math.atan2(y, x) * 180) / Math.PI;
-    const rotation = rotorRef.current ? currentTransformAngle(rotorRef.current, rotationRef.current) : rotationRef.current;
-    const idleRotation = idleRef.current ? currentTransformAngle(idleRef.current, 0) : 0;
-    const angle = screenAngleToWheelAngle(screenAngle, rotation + idleRotation);
+    const visualRotation = statusRef.current === 'spinning'
+      ? visualRotationRef.current
+      : (rotorRef.current ? currentTransformAngle(rotorRef.current, rotationRef.current) : rotationRef.current)
+        + (idleRef.current ? currentTransformAngle(idleRef.current, 0) : 0);
+    const angle = screenAngleToWheelAngle(screenAngle, visualRotation);
     const sector = sectorAtAngle(sectorsRef.current, angle);
     return sector ? { item: sector.item, index: sector.index, angle } : null;
   }, []);
@@ -704,6 +763,7 @@ export function Wheel<T = unknown>({
   }, [controller, host]);
 
   useEffect(() => () => {
+    if (pointerBounceFrameRef.current !== null) cancelAnimationFrame(pointerBounceFrameRef.current);
     cancel('Wheel unmounted');
     finishItemsTransition(false);
   }, [cancel, finishItemsTransition]);
@@ -722,10 +782,6 @@ export function Wheel<T = unknown>({
     '--wheel-idle-scale': String(Math.max(0.1, resolvedIdleAnimation.scale)),
   } as CSSProperties;
 
-  const resolveRenderer = (count: number): 'svg' | 'canvas' => renderer === 'auto'
-    ? count >= Math.max(1, canvasThreshold) ? 'canvas' : 'svg'
-    : renderer;
-
   const renderSectors = (
     drawingSectors: readonly Sector<T>[],
     key: string,
@@ -733,19 +789,18 @@ export function Wheel<T = unknown>({
     drawingStyle?: CSSProperties,
     decorations = true,
   ) => {
-    const resolvedRenderer = resolveRenderer(drawingSectors.length);
     const rendererProps = {
       sectors: drawingSectors,
       theme,
       minLabelAngle,
       highlightedItemId,
+      highlightStyle,
+      onCanvasDraw,
       decorations,
       className: drawingClassName,
       style: drawingStyle,
     };
-    return resolvedRenderer === 'canvas'
-      ? <WheelCanvasRenderer key={key} {...rendererProps} maxCanvasDpr={maxCanvasDpr} />
-      : <WheelSvgRenderer key={key} {...rendererProps} />;
+    return <WheelCanvasRenderer key={key} {...rendererProps} maxCanvasDpr={maxCanvasDpr} />;
   };
 
   const renderDrawing = (drawingItems: readonly WheelItem<T>[], key: string, drawingClassName?: string, drawingStyle?: CSSProperties) => {
@@ -755,6 +810,12 @@ export function Wheel<T = unknown>({
 
   const transitionStyle = itemsTransitionState
     ? { animationDuration: `${itemsTransitionState.config.duration}ms`, animationTimingFunction: itemsTransitionState.config.easing }
+    : undefined;
+  // Keep the current drawing mounted while a transition layer prepares its
+  // first frame. A Canvas is transparent until it is painted, so this avoids
+  // briefly replacing the wheel with the renderer's CSS background.
+  const transitionLayerStyle: CSSProperties | undefined = itemsTransitionState
+    ? { ...transitionStyle, backgroundColor: 'transparent' }
     : undefined;
   return (
     <div className={['wheel', interactive && 'wheel--interactive', className].filter(Boolean).join(' ')} style={wheelStyle} aria-busy={status !== 'idle'}>
@@ -774,24 +835,28 @@ export function Wheel<T = unknown>({
           style={idleStyle}
         >
         <div className="wheel__rotor" ref={rotorRef} style={{ transform: `rotate(${committedRotation}deg)` }}>
-          {itemsTransitionState ? (
-            itemsTransitionState.config.mode === 'collapse' ? (() => {
-              if (geometryCollapse) {
-                return renderSectors(
-                  interpolateSectors(createSectors(itemsTransitionState.from), createSectors(itemsTransitionState.to), itemsTransitionProgress),
-                  `transition-geometry-${itemsTransitionState.id}`,
-                  'wheel__drawing',
-                );
-              }
-              return <>
-                {renderDrawing(itemsTransitionState.from, `transition-from-${itemsTransitionState.id}`, 'wheel__drawing wheel__drawing--fadeOut', transitionStyle)}
-                {renderDrawing(itemsTransitionState.to, `transition-to-${itemsTransitionState.id}`, 'wheel__drawing wheel__drawing--fadeIn', transitionStyle)}
-              </>;
-            })() : <>
-              {renderDrawing(itemsTransitionState.from, `transition-from-${itemsTransitionState.id}`, 'wheel__drawing wheel__drawing--fadeOut', transitionStyle)}
-              {renderDrawing(itemsTransitionState.to, `transition-to-${itemsTransitionState.id}`, 'wheel__drawing wheel__drawing--fadeIn', transitionStyle)}
-            </>
-          ) : renderDrawing(displayItems, 'current', 'wheel__drawing')}
+          {itemsTransitionState ? <>
+            {renderDrawing(itemsTransitionState.from, 'current', 'wheel__drawing')}
+            {itemsTransitionState.config.mode === 'collapse' && canvasCollapsePolicy && canvasCollapsePolicy !== 'crossfade'
+              ? <WheelCanvasTransitionRenderer
+                  key={`transition-canvas-${itemsTransitionState.id}`}
+                  from={createSectors(itemsTransitionState.from)}
+                  to={createSectors(itemsTransitionState.to)}
+                  theme={theme}
+                  minLabelAngle={minLabelAngle}
+                  duration={itemsTransitionState.config.duration}
+                  easing={itemsTransitionState.config.easing}
+                  detail={canvasCollapsePolicy === 'full' ? 'full' : 'transition'}
+                  className="wheel__drawing"
+                  style={transitionLayerStyle}
+                  maxCanvasDpr={maxCanvasDpr}
+                  onCanvasDraw={onCanvasDraw}
+                />
+              : <>
+                  {renderDrawing(itemsTransitionState.from, `transition-from-${itemsTransitionState.id}`, 'wheel__drawing wheel__drawing--fadeOut', transitionLayerStyle)}
+                  {renderDrawing(itemsTransitionState.to, `transition-to-${itemsTransitionState.id}`, 'wheel__drawing wheel__drawing--fadeIn', transitionLayerStyle)}
+                </>}
+          </> : renderDrawing(displayItems, 'current', 'wheel__drawing')}
         </div>
         </div>
         {overlay && <div className="wheel__overlay">{overlay}</div>}
@@ -800,6 +865,9 @@ export function Wheel<T = unknown>({
           <div className="wheel__pointerContent" ref={pointerRef}>{pointer ?? <DefaultPointer />}</div>
         </div>
       </div>
+      {accessibleItemList && <ul className="wheel__srOnly" aria-label={`${ariaLabel} sectors`}>
+        {displayItems.map((item) => <li key={item.id} aria-disabled={item.disabled || item.weight <= 0}>{item.label}{item.weight > 0 ? ` (${item.weight})` : ''}</li>)}
+      </ul>}
       <span className="wheel__srOnly" aria-live="polite">{announcement}</span>
     </div>
   );

@@ -1,0 +1,20 @@
+:root { color: #e2e8f0; background: #07101e; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { min-width: 320px; min-height: 100vh; margin: 0; }
+button, select { font: inherit; }
+.benchmark { width: min(1280px, 100%); margin: 0 auto; padding: 32px clamp(20px, 4vw, 64px) 64px; }
+.benchmark header { display: grid; gap: 10px; margin-bottom: 28px; }
+.benchmark header p { margin: 0; color: #a78bfa; font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.benchmark h1 { margin: 0; color: #f8fafc; font-size: clamp(2rem, 5vw, 3.8rem); letter-spacing: -.06em; }
+.benchmark a { color: #c4b5fd; }
+.benchmark__controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; padding: 18px; border: 1px solid rgba(148,163,184,.22); border-radius: 18px; background: #0e172a; }
+.benchmark__controls label { display: grid; gap: 6px; color: #94a3b8; font-size: .78rem; font-weight: 700; }
+.benchmark__controls select, .benchmark__controls button { min-height: 40px; padding: 0 12px; border: 1px solid rgba(148,163,184,.25); border-radius: 9px; color: #f8fafc; background: #111c31; }
+.benchmark__controls button { border-color: transparent; background: #8b5cf6; font-weight: 800; }
+.benchmark__content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, .38fr); gap: 28px; align-items: center; margin-top: 28px; }
+.benchmark__wheel { display: grid; min-height: min(72vw, 620px); place-items: center; border-radius: 24px; background: radial-gradient(circle, rgba(124,58,237,.2), transparent 65%), #0e172a; }
+.benchmark__metrics { display: grid; gap: 10px; margin: 0; }
+.benchmark__metrics div { display: flex; justify-content: space-between; gap: 12px; padding: 14px; border: 1px solid rgba(148,163,184,.18); border-radius: 12px; background: #0e172a; }
+.benchmark__metrics dt { color: #94a3b8; font-size: .78rem; }
+.benchmark__metrics dd { margin: 0; color: #f8fafc; font-weight: 800; }
+@media (max-width: 760px) { .benchmark__content { grid-template-columns: 1fr; } }

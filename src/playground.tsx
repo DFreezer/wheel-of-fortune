@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
 import {
   Wheel,
   WheelMedia,
@@ -9,7 +9,6 @@ import {
   type SpinAnimationConfig,
   type WheelItem,
   type WheelPointerPosition,
-  type WheelRenderer,
   type WheelSectorImage,
   type WheelSoundConfig,
   type WheelThemeOptions,
@@ -110,22 +109,22 @@ const translations = {
       instruction: 'Pass a controlled items array. Use the controller only when you need to start or cancel spins imperatively.',
       labEyebrow: 'Interactive lab',
       labTitle: 'Tune every detail. See every change.',
-      labCopy: 'Switch renderers, edit sectors, upload media and sounds, then test client- or server-controlled outcomes without leaving the page.',
+      labCopy: 'Edit sectors, upload media and sounds, then test client- or server-controlled outcomes without leaving the page.',
       features: [
         { value: '60+', label: 'high-refresh FPS' },
         { value: '1–1000+', label: 'weighted sectors' },
-        { value: 'SVG / Canvas', label: 'adaptive rendering' },
+        { value: 'Canvas', label: 'adaptive rendering' },
         { value: 'Client / Server', label: 'winner control' },
       ],
     },
     settings: { title: 'Wheel settings', groups: 'Settings groups' },
     stage: { preview: 'Wheel preview', result: 'Result', lastTick: 'Last tick', underCursor: 'Under cursor', sectors: (count: number) => `${count} sectors`, weight: 'weight' },
     spin: { title: 'Spin', spinning: 'Wheel is spinning…', random: 'Spin randomly', server: 'Spin with server result', cancel: 'Cancel spin / request', serverWinner: 'Server winner', landing: 'Landing position', center: 'Sector center', randomInside: 'Random inside', preset: 'Spin preset', rotations: 'rotations', duration: 'Duration', seconds: 's', async: 'Resolve winner through async resolver (1.2s demo)' },
-    appearance: { title: 'Appearance, frame and center', rendering: 'Rendering', auto: 'Auto: Canvas from 300', svg: 'SVG: maximum customization', canvas: 'Canvas: dense wheel', size: 'Size inside container', frame: 'Frame', center: 'Center', classic: 'Classic SVG', neon: 'Animated neon SVG', cosmic: 'Cosmic orbits SVG', realistic: 'Realistic space', custom: 'Custom media', none: 'No frame', cap: 'SPIN cap', gem: 'Gem', miniSolar: 'Mini solar system', realisticSolar: 'Realistic solar system', noCenter: 'No center', frameMedia: 'Frame: URL, GIF or WebM', centerMedia: 'Center: URL, GIF or WebM', centerSize: 'Center size', pointerPosition: 'Pointer position', top: 'Top', right: 'Right', pointer: 'Pointer', defaultPointer: 'Default', cosmicPointer: 'Spacecraft', realisticPointer: 'Realistic spacecraft' },
+    appearance: { title: 'Appearance, frame and center', size: 'Size inside container', frame: 'Frame', center: 'Center', classic: 'Classic SVG', neon: 'Animated neon SVG', cosmic: 'Cosmic orbits SVG', realistic: 'Realistic space', custom: 'Custom media', none: 'No frame', cap: 'SPIN cap', gem: 'Gem', miniSolar: 'Mini solar system', realisticSolar: 'Realistic solar system', noCenter: 'No center', frameMedia: 'Frame: URL, GIF or WebM', centerMedia: 'Center: URL, GIF or WebM', centerSize: 'Center size', pointerPosition: 'Pointer position', top: 'Top', right: 'Right', pointer: 'Pointer', defaultPointer: 'Default', cosmicPointer: 'Spacecraft', realisticPointer: 'Realistic spacecraft' },
     theme: { title: 'Global theme and text', reset: 'Reset', colors: 'Colors, borders and dividers', wheelBackground: 'Wheel background', text: 'Text', color: 'Color', border: 'Border', dividers: 'Dividers', dividerShadow: 'Divider shadow', blur: 'Blur', offsetX: 'Offset X', offsetY: 'Offset Y', typography: 'Typography and positioning', font: 'Font', orientation: 'Orientation', tangential: 'Tangential', radial: 'Radial', horizontal: 'Horizontal', align: 'Alignment', middle: 'Center', start: 'Start', end: 'End', overflow: 'Overflow', hide: 'Hide', ellipsis: 'Ellipsis', shrink: 'Shrink', sizeShort: 'Size', weightShort: 'Weight', radius: 'Radius', textEffects: 'Text stroke and shadow', textStroke: 'Text stroke', shadow: 'Text shadow', thickness: 'Thickness', shadowX: 'Shadow X', shadowY: 'Shadow Y' },
-    sectors: { addRemove: 'Add and remove', transition: 'List change animation', collapse: 'Collapse / expand sectors', noAnimation: 'No animation', transitionHint: 'In SVG, neighboring sector boundaries smoothly meet on removal and spread on addition. Dense Canvas wheels use a fast crossfade.', duration: 'Duration', title: 'Sectors', add: '+ Add', restore: 'Restore demo', loadTest: 'Load test set', hidden: (count: number) => `The editor is hidden for ${count} sectors so the playground does not distort wheel performance.`, empty: 'Add at least one sector.', textTitle: 'Text', resetOverride: 'Reset override', imageSection: 'Sector image', added: 'Added', notSet: 'Not set', imageOverColor: 'Image over color', opacity: 'Opacity', scale: 'Scale', rotation: 'Rotation', imageOffsetX: 'Offset X', imageOffsetY: 'Offset Y', fit: 'Fit', stretch: 'Stretch', removeImage: 'Remove image', sectorText: 'Sector text', color: 'Color' },
+    sectors: { addRemove: 'Add and remove', transition: 'List change animation', collapse: 'Collapse / expand sectors', noAnimation: 'No animation', transitionHint: 'Collapse redraws up to 150 sectors at an appropriate level of detail and crossfades larger wheels.', duration: 'Duration', title: 'Sectors', add: '+ Add', restore: 'Restore demo', loadTest: 'Load test set', hidden: (count: number) => `The editor is hidden for ${count} sectors so the playground does not distort wheel performance.`, empty: 'Add at least one sector.', textTitle: 'Text', resetOverride: 'Reset override', imageSection: 'Sector image', added: 'Added', notSet: 'Not set', imageOverColor: 'Image over color', opacity: 'Opacity', scale: 'Scale', rotation: 'Rotation', imageOffsetX: 'Offset X', imageOffsetY: 'Offset Y', fit: 'Fit', stretch: 'Stretch', removeImage: 'Remove image', sectorText: 'Sector text', color: 'Color' },
     effects: { idle: 'Idle animation', idleAria: 'Enable idle animation', idleLead: 'A subtle motion keeps the wheel alive between spins.', period: 'Period', rotation: 'Rotation', pulse: 'Pulse', sound: 'Sound', start: 'Start', sectorPass: 'Sector pass', win: 'Win' },
-    errors: { initial: 'Choose a mode and spin the wheel', selectedServer: (label: string) => `Sector “${label}” selected for server-side mode`, denseLoaded: (count: number) => `Loaded ${count} sectors for renderer testing`, winner: (label: string, mode: string) => `${label} · ${mode === 'server' ? 'server-side' : 'client-side'}` },
+    errors: { initial: 'Choose a mode and spin the wheel', selectedServer: (label: string) => `Sector “${label}” selected for server-side mode`, denseLoaded: (count: number) => `Loaded ${count} sectors for Canvas performance testing`, winner: (label: string, mode: string) => `${label} · ${mode === 'server' ? 'server-side' : 'client-side'}` },
   },
   uk: {
     language: { label: 'Мова', english: 'English', ukrainian: 'Українська' },
@@ -166,22 +165,22 @@ const translations = {
       instruction: 'Передайте керований масив items. Controller потрібен лише для імперативного запуску або скасування обертання.',
       labEyebrow: 'Інтерактивна лабораторія',
       labTitle: 'Налаштовуйте кожну деталь. Одразу бачте результат.',
-      labCopy: 'Перемикайте renderer, редагуйте сектори, завантажуйте медіа та звуки й тестуйте client- або server-controlled результат на одній сторінці.',
+      labCopy: 'Редагуйте сектори, завантажуйте медіа та звуки й тестуйте client- або server-controlled результат на одній сторінці.',
       features: [
         { value: '60+', label: 'FPS на швидких дисплеях' },
         { value: '1–1000+', label: 'зважених секторів' },
-        { value: 'SVG / Canvas', label: 'адаптивний рендеринг' },
+        { value: 'Canvas', label: 'адаптивний рендеринг' },
         { value: 'Client / Server', label: 'контроль переможця' },
       ],
     },
     settings: { title: 'Налаштування колеса', groups: 'Групи налаштувань' },
     stage: { preview: 'Попередній перегляд колеса', result: 'Результат', lastTick: 'Останній tick', underCursor: 'Під курсором', sectors: (count: number) => `${count} секторів`, weight: 'вага' },
     spin: { title: 'Прокрутка', spinning: 'Колесо обертається…', random: 'Крутити випадково', server: 'Крутити з результатом сервера', cancel: 'Скасувати прокрутку / запит', serverWinner: 'Переможець від сервера', landing: 'Позиція зупинки', center: 'Центр сектора', randomInside: 'Випадково всередині', preset: 'Пресет обертання', rotations: 'обертів', duration: 'Тривалість', seconds: 'с', async: 'Отримувати winner через async resolver (демо 1,2 с)' },
-    appearance: { title: 'Вигляд, рамка та центр', rendering: 'Рендеринг', auto: 'Auto: Canvas від 300', svg: 'SVG: максимум кастомізації', canvas: 'Canvas: щільне колесо', size: 'Розмір у контейнері', frame: 'Рамка', center: 'Центр', classic: 'Класична SVG', neon: 'Анімований неон SVG', cosmic: 'Космічні орбіти SVG', realistic: 'Реалістичний космос', custom: 'Власне медіа', none: 'Без рамки', cap: 'SPIN cap', gem: 'Кристал', miniSolar: 'Міні-сонячна система', realisticSolar: 'Реалістична сонячна система', noCenter: 'Без центра', frameMedia: 'Рамка: URL, GIF або WebM', centerMedia: 'Центр: URL, GIF або WebM', centerSize: 'Розмір центра', pointerPosition: 'Положення вказівника', top: 'Зверху', right: 'Праворуч', pointer: 'Вказівник', defaultPointer: 'Стандартний', cosmicPointer: 'Космічний апарат', realisticPointer: 'Реалістичний апарат' },
+    appearance: { title: 'Вигляд, рамка та центр', size: 'Розмір у контейнері', frame: 'Рамка', center: 'Центр', classic: 'Класична SVG', neon: 'Анімований неон SVG', cosmic: 'Космічні орбіти SVG', realistic: 'Реалістичний космос', custom: 'Власне медіа', none: 'Без рамки', cap: 'SPIN cap', gem: 'Кристал', miniSolar: 'Міні-сонячна система', realisticSolar: 'Реалістична сонячна система', noCenter: 'Без центра', frameMedia: 'Рамка: URL, GIF або WebM', centerMedia: 'Центр: URL, GIF або WebM', centerSize: 'Розмір центра', pointerPosition: 'Положення вказівника', top: 'Зверху', right: 'Праворуч', pointer: 'Вказівник', defaultPointer: 'Стандартний', cosmicPointer: 'Космічний апарат', realisticPointer: 'Реалістичний апарат' },
     theme: { title: 'Загальна тема та текст', reset: 'Скинути', colors: 'Кольори, межі та роздільники', wheelBackground: 'Фон колеса', text: 'Текст', color: 'Колір', border: 'Обводка', dividers: 'Роздільники', dividerShadow: 'Тінь роздільників', blur: 'Розмиття', offsetX: 'Зсув X', offsetY: 'Зсув Y', typography: 'Типографіка та позиціонування', font: 'Шрифт', orientation: 'Орієнтація', tangential: 'По дотичній', radial: 'По радіусу', horizontal: 'Горизонтально', align: 'Вирівнювання', middle: 'По центру', start: 'На початку', end: 'У кінці', overflow: 'Переповнення', hide: 'Приховати', ellipsis: 'Многоточчя', shrink: 'Зменшити', sizeShort: 'Розмір', weightShort: 'Товщина', radius: 'Радіус', textEffects: 'Обводка й тінь тексту', textStroke: 'Обводка тексту', shadow: 'Тінь тексту', thickness: 'Товщина', shadowX: 'Тінь X', shadowY: 'Тінь Y' },
-    sectors: { addRemove: 'Додавання та видалення', transition: 'Анімація зміни списку', collapse: 'Схлопування / розкриття секторів', noAnimation: 'Без анімації', transitionHint: 'У SVG межі сусідніх секторів плавно сходяться під час видалення та розходяться під час додавання. Для щільного Canvas-колеса використовується швидкий crossfade.', duration: 'Тривалість', title: 'Сектори', add: '+ Додати', restore: 'Відновити демо', loadTest: 'Навантажувальний набір', hidden: (count: number) => `Редактор приховано для ${count} секторів, щоб playground не спотворював продуктивність колеса.`, empty: 'Додайте хоча б один сектор.', textTitle: 'Текст', resetOverride: 'Скинути override', imageSection: 'Зображення сектора', added: 'Додано', notSet: 'Не задано', imageOverColor: 'Зображення поверх кольору', opacity: 'Непрозорість', scale: 'Масштаб', rotation: 'Поворот', imageOffsetX: 'Зсув X', imageOffsetY: 'Зсув Y', fit: 'Заповнення', stretch: 'Розтягнути', removeImage: 'Прибрати зображення', sectorText: 'Текст сектора', color: 'Колір' },
+    sectors: { addRemove: 'Додавання та видалення', transition: 'Анімація зміни списку', collapse: 'Схлопування / розкриття секторів', noAnimation: 'Без анімації', transitionHint: 'Схлопування перемальовує до 150 секторів з відповідним рівнем деталізації, а більші колеса плавно змінює через crossfade.', duration: 'Тривалість', title: 'Сектори', add: '+ Додати', restore: 'Відновити демо', loadTest: 'Навантажувальний набір', hidden: (count: number) => `Редактор приховано для ${count} секторів, щоб playground не спотворював продуктивність колеса.`, empty: 'Додайте хоча б один сектор.', textTitle: 'Текст', resetOverride: 'Скинути override', imageSection: 'Зображення сектора', added: 'Додано', notSet: 'Не задано', imageOverColor: 'Зображення поверх кольору', opacity: 'Непрозорість', scale: 'Масштаб', rotation: 'Поворот', imageOffsetX: 'Зсув X', imageOffsetY: 'Зсув Y', fit: 'Заповнення', stretch: 'Розтягнути', removeImage: 'Прибрати зображення', sectorText: 'Сектор текст', color: 'Колір' },
     effects: { idle: 'Idle-анімація', idleAria: 'Увімкнути idle-анімацію', idleLead: 'Легкий рух оживляє колесо між прокрутками.', period: 'Період', rotation: 'Поворот', pulse: 'Пульсація', sound: 'Звук', start: 'Старт', sectorPass: 'Проходження сектора', win: 'Виграш' },
-    errors: { initial: 'Оберіть режим і запустіть колесо', selectedServer: (label: string) => `Сектор «${label}» вибрано для server-side режиму`, denseLoaded: (count: number) => `Завантажено ${count} секторів для перевірки renderer`, winner: (label: string, mode: string) => `${label} · ${mode === 'server' ? 'server-side' : 'client-side'}` },
+    errors: { initial: 'Оберіть режим і запустіть колесо', selectedServer: (label: string) => `Сектор «${label}» вибрано для server-side режиму`, denseLoaded: (count: number) => `Завантажено ${count} секторів для перевірки Canvas performance`, winner: (label: string, mode: string) => `${label} · ${mode === 'server' ? 'server-side' : 'client-side'}` },
   },
 } as const;
 
@@ -808,8 +807,143 @@ function SoundPicker({
   );
 }
 
-export function Playground() {
+interface PlaygroundWheelStageHandle {
+  spin(mode: 'client' | 'server'): Promise<void>;
+  cancel(): void;
+  setResult(message: string | null): void;
+}
+
+interface PlaygroundWheelStageProps {
+  items: readonly WheelItem[];
+  copy: LocaleCopy;
+  wheelSize: number;
+  itemsTransition: ItemsTransitionConfig;
+  theme: WheelThemeOptions;
+  pointer?: ReactNode;
+  pointerPosition: WheelPointerPosition;
+  overlay?: ReactNode;
+  center?: ReactNode;
+  centerSize: number;
+  sounds?: WheelSoundConfig;
+  spinAnimation: Partial<SpinAnimationConfig>;
+  idleAnimation: Partial<IdleAnimationConfig>;
+  winnerId: string;
+  landing: 'center' | 'random';
+  asyncServer: boolean;
+  onItemSelect: (item: WheelItem) => void;
+  onSpinStateChange: (spinning: boolean) => void;
+  onErrorMessage: (message: string | null) => void;
+}
+
+const PlaygroundWheelStage = memo(forwardRef<PlaygroundWheelStageHandle, PlaygroundWheelStageProps>(function PlaygroundWheelStage({
+  items,
+  copy,
+  wheelSize,
+  itemsTransition,
+  theme,
+  pointer,
+  pointerPosition,
+  overlay,
+  center,
+  centerSize,
+  sounds,
+  spinAnimation,
+  idleAnimation,
+  winnerId,
+  landing,
+  asyncServer,
+  onItemSelect,
+  onSpinStateChange,
+  onErrorMessage,
+}, ref) {
   const wheel = useWheel();
+  const [lastResult, setLastResult] = useState<string | null>(null);
+  const [lastPass, setLastPass] = useState('—');
+  const [hoveredItemId, setHoveredItemId] = useState<string | undefined>();
+  const [hoveredLabel, setHoveredLabel] = useState('—');
+  const lastPassReportRef = useRef(0);
+  const totalWeight = useMemo(() => items.reduce((sum, item) => sum + (item.disabled ? 0 : item.weight), 0), [items]);
+
+  const handleHover = useCallback((sector: { item: WheelItem } | null) => {
+    setHoveredItemId(sector?.item.id);
+    setHoveredLabel(sector?.item.label ?? '—');
+  }, []);
+
+  const handleSectorPass = useCallback((item: WheelItem) => {
+    const interval = items.length > 150 ? 100 : 1000 / 30;
+    const now = performance.now();
+    if (now - lastPassReportRef.current < interval) return;
+    lastPassReportRef.current = now;
+    setLastPass(item.label);
+  }, [items.length]);
+
+  const handleSectorClick = useCallback(({ item }: { item: WheelItem }) => {
+    onItemSelect(item);
+    setLastResult(copy.errors.selectedServer(item.label));
+  }, [copy.errors, onItemSelect]);
+
+  const spin = useCallback(async (mode: 'client' | 'server') => {
+    onErrorMessage(null);
+    onSpinStateChange(true);
+    try {
+      const request = mode === 'server'
+        ? asyncServer
+          ? {
+              mode: 'server' as const,
+              resolveWinner: async ({ signal }: { signal: AbortSignal }) => {
+                await waitForServer(signal);
+                return { winnerId, landing: { mode: landing, edgePadding: 0.15 }, animation: spinAnimation };
+              },
+            }
+          : { mode: 'server' as const, winnerId, landing: { mode: landing, edgePadding: 0.15 }, animation: spinAnimation }
+        : { mode: 'client' as const, landing: { mode: landing, edgePadding: 0.15 }, animation: spinAnimation };
+      const result = await wheel.spin(request);
+      setLastResult(copy.errors.winner(result.winner.label, mode));
+    } catch (cause) {
+      onErrorMessage(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      onSpinStateChange(false);
+    }
+  }, [asyncServer, copy.errors, landing, onErrorMessage, onSpinStateChange, spinAnimation, wheel, winnerId]);
+
+  useImperativeHandle(ref, () => ({
+    spin,
+    cancel: () => wheel.cancel('Cancelled from playground'),
+    setResult: setLastResult,
+  }), [spin, wheel]);
+
+  return (
+    <section className="stage" aria-label={copy.stage.preview}>
+      <div className="resultPill" aria-live="polite"><span>{copy.stage.result}</span>{lastResult ?? copy.errors.initial}</div>
+      <div className="wheelStage" style={{ '--preview-size': `${wheelSize}%` } as CSSProperties}>
+        <Wheel
+          items={items}
+          controller={wheel}
+          size="var(--preview-size)"
+          itemsTransition={itemsTransition}
+          theme={theme}
+          pointer={pointer}
+          pointerPosition={pointerPosition}
+          overlay={overlay}
+          center={center}
+          centerSize={`${centerSize}%`}
+          sounds={sounds}
+          spinAnimation={spinAnimation}
+          idleAnimation={idleAnimation}
+          minLabelAngle={8}
+          highlightedItemId={hoveredItemId}
+          onSectorHover={handleHover}
+          onSectorClick={handleSectorClick}
+          onSectorPass={handleSectorPass}
+          onError={(error) => onErrorMessage(error.message)}
+        />
+      </div>
+      <div className="stageMeta"><span>{copy.stage.lastTick}: <strong>{lastPass}</strong></span><span>{copy.stage.underCursor}: <strong>{hoveredLabel}</strong></span><span>{copy.stage.sectors(items.length)} · {copy.stage.weight} {totalWeight}</span></div>
+    </section>
+  );
+}));
+
+export function Playground() {
   const [locale, setLocale] = useState<Locale>('en');
   const [installCopied, setInstallCopied] = useState(false);
   const copy = translations[locale];
@@ -820,7 +954,6 @@ export function Playground() {
   const [wheelSize, setWheelSize] = useState(92);
   const [duration, setDuration] = useState(4800);
   const [spinPreset, setSpinPreset] = useState<SpinPreset>('smooth');
-  const [renderer, setRenderer] = useState<WheelRenderer>('auto');
   const [itemsTransitionMode, setItemsTransitionMode] = useState<ItemsTransitionConfig['mode']>('crossfade');
   const [itemsTransitionDuration, setItemsTransitionDuration] = useState(360);
   const [frameMode, setFrameMode] = useState<FrameMode>('realistic-space');
@@ -836,8 +969,6 @@ export function Playground() {
   const [pointerPosition, setPointerPosition] = useState<WheelPointerPosition>('top');
   const [themeSettings, setThemeSettings] = useState<ThemeSettings>(defaultThemeSettings);
   const [selectedItemId, setSelectedItemId] = useState(initialItems[0].id);
-  const [lastResult, setLastResult] = useState<string | null>(null);
-  const [lastPass, setLastPass] = useState('—');
   const [error, setError] = useState<string | null>(null);
   const [tickUrl, setTickUrl] = useState(realisticSpaceAssets.beep);
   const [spinUrl, setSpinUrl] = useState('');
@@ -848,9 +979,7 @@ export function Playground() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [asyncServer, setAsyncServer] = useState(false);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [hoveredItemId, setHoveredItemId] = useState<string | undefined>();
-  const [hoveredLabel, setHoveredLabel] = useState('—');
-  const lastPassReportRef = useRef(0);
+  const wheelStageRef = useRef<PlaygroundWheelStageHandle>(null);
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -869,7 +998,6 @@ export function Playground() {
   } as const satisfies Record<string, { label: string; description: string; animation: Omit<SpinAnimationConfig, 'duration'> }>;
   const settingsPanels = settingsPanelIds.map((id) => ({ id, ...copy.panels[id] }));
 
-  const totalWeight = useMemo(() => items.reduce((sum, item) => sum + (item.disabled ? 0 : item.weight), 0), [items]);
   const spinAnimation = useMemo<Partial<SpinAnimationConfig>>(() => ({ ...spinPresets[spinPreset].animation, duration }), [duration, spinPreset]);
   const itemsTransition = useMemo<ItemsTransitionConfig>(() => ({
     enabled: itemsTransitionMode !== 'none',
@@ -918,13 +1046,13 @@ export function Playground() {
       overflow: themeSettings.overflow,
     },
   }), [themeSettings]);
-  const sounds: WheelSoundConfig | undefined = soundEnabled ? {
+  const sounds = useMemo<WheelSoundConfig | undefined>(() => soundEnabled ? {
     enabled: true,
     spin: (spinFile ?? spinUrl) || undefined,
     tick: (tickFile ?? tickUrl) || undefined,
     win: (winFile ?? winUrl) || undefined,
     volume: 0.45,
-  } : undefined;
+  } : undefined, [soundEnabled, spinFile, spinUrl, tickFile, tickUrl, winFile, winUrl]);
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0];
   const selectedText = { ...wheelTheme.text, ...selectedItem?.text } as SectorTextStyle | undefined;
   const selectedImage = selectedItem?.image
@@ -983,7 +1111,7 @@ export function Playground() {
     setItems(denseItems);
     setWinnerId(denseItems[0].id);
     setSelectedItemId(denseItems[0].id);
-    setLastResult(copy.errors.denseLoaded(count));
+    wheelStageRef.current?.setResult(copy.errors.denseLoaded(count));
   };
 
   const resetDemo = () => {
@@ -992,29 +1120,14 @@ export function Playground() {
     setSelectedItemId(initialItems[0].id);
   };
 
-  const spin = async (mode: 'client' | 'server') => {
-    setError(null);
-    setIsSpinning(true);
-    try {
-      const request = mode === 'server'
-        ? asyncServer
-          ? {
-              mode: 'server' as const,
-              resolveWinner: async ({ signal }: { signal: AbortSignal }) => {
-                await waitForServer(signal);
-                return { winnerId, landing: { mode: landing, edgePadding: 0.15 }, animation: spinAnimation };
-              },
-            }
-          : { mode: 'server' as const, winnerId, landing: { mode: landing, edgePadding: 0.15 }, animation: spinAnimation }
-        : { mode: 'client' as const, landing: { mode: landing, edgePadding: 0.15 }, animation: spinAnimation };
-      const result = await wheel.spin(request);
-      setLastResult(copy.errors.winner(result.winner.label, mode));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setIsSpinning(false);
-    }
-  };
+  const spin = useCallback((mode: 'client' | 'server') => {
+    void wheelStageRef.current?.spin(mode);
+  }, []);
+
+  const selectWheelItem = useCallback((item: WheelItem) => {
+    setWinnerId(item.id);
+    setSelectedItemId(item.id);
+  }, []);
 
   const copyInstallCommand = async () => {
     try {
@@ -1033,23 +1146,23 @@ export function Playground() {
     window.setTimeout(() => setInstallCopied(false), 1800);
   };
 
-  const overlay = frameMode === 'classic' ? <FrameOverlay />
+  const overlay = useMemo(() => frameMode === 'classic' ? <FrameOverlay />
     : frameMode === 'neon' ? <NeonFrameOverlay />
       : frameMode === 'cosmic' ? <CosmicFrameOverlay />
         : frameMode === 'realistic-space' ? <RealisticSpaceFrameOverlay />
           : frameMode === 'custom' && frameUrl ? <WheelMedia src={frameUrl} alt={copy.media.customFrame} className="slotMedia slotMedia--frame" />
-            : undefined;
-  const center = centerMode === 'cap' ? <CenterCap />
+            : undefined, [copy.media.customFrame, frameMode, frameUrl]);
+  const center = useMemo(() => centerMode === 'cap' ? <CenterCap />
     : centerMode === 'gem' ? <CenterGem />
       : centerMode === 'neon' ? <NeonCenter />
         : centerMode === 'cosmic' ? <CosmicCenter />
           : centerMode === 'realistic-space' ? <RealisticSpaceCenter />
             : centerMode === 'custom' && centerUrl ? <WheelMedia src={centerUrl} alt={copy.media.centerImage} className="slotMedia slotMedia--center" />
-              : undefined;
-  const pointer = pointerMode === 'neon' ? <NeonPointer />
+              : undefined, [centerMode, centerUrl, copy.media.centerImage]);
+  const pointer = useMemo(() => pointerMode === 'neon' ? <NeonPointer />
     : pointerMode === 'cosmic' ? <CosmicPointer />
       : pointerMode === 'realistic-space' ? <RealisticSpacePointer />
-        : undefined;
+        : undefined, [pointerMode]);
 
   return (
     <main className="playground">
@@ -1152,46 +1265,28 @@ function PrizeWheel() {
       </section>
 
       <div className="playgroundGrid">
-        <section className="stage" aria-label={copy.stage.preview}>
-          <div className="resultPill" aria-live="polite"><span>{copy.stage.result}</span>{lastResult ?? copy.errors.initial}</div>
-          <div className="wheelStage" style={{ '--preview-size': `${wheelSize}%` } as CSSProperties}>
-            <Wheel
-              items={items}
-              controller={wheel}
-              size="var(--preview-size)"
-              renderer={renderer}
-              itemsTransition={itemsTransition}
-              theme={wheelTheme}
-              pointer={pointer}
-              pointerPosition={pointerPosition}
-              overlay={overlay}
-              center={center}
-              centerSize={`${centerSize}%`}
-              sounds={sounds}
-              spinAnimation={spinAnimation}
-              idleAnimation={idleAnimation}
-              minLabelAngle={8}
-              highlightedItemId={hoveredItemId}
-              onSectorHover={(sector) => {
-                setHoveredItemId(sector?.item.id);
-                setHoveredLabel(sector?.item.label ?? '—');
-              }}
-              onSectorClick={({ item }) => {
-                setWinnerId(item.id);
-                setSelectedItemId(item.id);
-                setLastResult(copy.errors.selectedServer(item.label));
-              }}
-              onSectorPass={(item) => {
-                const now = performance.now();
-                if (now - lastPassReportRef.current < 70) return;
-                lastPassReportRef.current = now;
-                setLastPass(item.label);
-              }}
-              onError={(nextError) => setError(nextError.message)}
-            />
-          </div>
-          <div className="stageMeta"><span>{copy.stage.lastTick}: <strong>{lastPass}</strong></span><span>{copy.stage.underCursor}: <strong>{hoveredLabel}</strong></span><span>{copy.stage.sectors(items.length)} · {copy.stage.weight} {totalWeight} · {renderer}</span></div>
-        </section>
+        <PlaygroundWheelStage
+          ref={wheelStageRef}
+          items={items}
+          copy={copy}
+          wheelSize={wheelSize}
+          itemsTransition={itemsTransition}
+          theme={wheelTheme}
+          pointer={pointer}
+          pointerPosition={pointerPosition}
+          overlay={overlay}
+          center={center}
+          centerSize={centerSize}
+          sounds={sounds}
+          spinAnimation={spinAnimation}
+          idleAnimation={idleAnimation}
+          winnerId={winnerId}
+          landing={landing}
+          asyncServer={asyncServer}
+          onItemSelect={selectWheelItem}
+          onSpinStateChange={setIsSpinning}
+          onErrorMessage={setError}
+        />
 
         <aside className="controls">
           <div className="settingsNav">
@@ -1237,7 +1332,7 @@ function PrizeWheel() {
               <button className="primaryButton" disabled={!items.length || isSpinning} onClick={() => void spin('client')}>{isSpinning ? copy.spin.spinning : copy.spin.random}</button>
               <button className="secondaryButton" disabled={!winnerId || isSpinning} onClick={() => void spin('server')}>{copy.spin.server}</button>
             </div>
-            {isSpinning && <button className="textButton" onClick={() => wheel.cancel('Cancelled from playground')}>{copy.spin.cancel}</button>}
+            {isSpinning && <button className="textButton" onClick={() => wheelStageRef.current?.cancel()}>{copy.spin.cancel}</button>}
             <label className="selectField">{copy.spin.serverWinner}
               <select value={winnerId} onChange={(event) => setWinnerId(event.target.value)}>
                 {items.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
@@ -1263,13 +1358,6 @@ function PrizeWheel() {
           {activePanel === 'appearance' && <div className="settingsPanel" id="settings-panel-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance">
           <section className="controlSection">
             <div className="sectionTitle"><h2>{copy.appearance.title}</h2><span>ReactNode slots</span></div>
-            <label className="selectField">{copy.appearance.rendering}
-              <select value={renderer} onChange={(event) => setRenderer(event.target.value as WheelRenderer)}>
-                <option value="auto">{copy.appearance.auto}</option>
-                <option value="svg">{copy.appearance.svg}</option>
-                <option value="canvas">{copy.appearance.canvas}</option>
-              </select>
-            </label>
             <label className="rangeField">{copy.appearance.size} <output>{wheelSize}%</output>
               <input type="range" min="50" max="100" value={wheelSize} onChange={(event) => setWheelSize(Number(event.target.value))} />
             </label>

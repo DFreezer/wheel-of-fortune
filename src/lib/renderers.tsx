@@ -1,17 +1,29 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { polar, wedgePath, type Sector } from './geometry';
-import type { SectorTextStyle, ShadowStyle, WheelItem, WheelSectorImage, WheelTheme } from './types';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { interpolateSectors, type Sector } from './geometry';
+import { easingProgress } from './easing';
+import type { SectorTextStyle, ShadowStyle, WheelCanvasDrawEvent, WheelHighlightStyle, WheelItem, WheelSectorImage, WheelTheme } from './types';
 
 const MIN_DIVIDER_ANGLE = 0.75;
 const LABEL_RADIUS_SCALE = 0.86;
+const DEFAULT_HIGHLIGHT_STYLE: WheelHighlightStyle = { color: '#ffffff', opacity: 0.18, blendMode: 'source-over' };
+
+/**
+ * Controls how much visual information a Canvas draw includes. `full` is the
+ * normal wheel; the lighter variants are reserved for item transitions.
+ */
+export type CanvasRenderDetail = 'full' | 'transition' | 'dense';
 
 export interface WheelDrawingProps<T> {
   sectors: readonly Sector<T>[];
   theme: WheelTheme;
   minLabelAngle: number;
   highlightedItemId?: string;
+  highlightStyle?: Partial<WheelHighlightStyle>;
+  onCanvasDraw?: (event: WheelCanvasDrawEvent) => void;
   /** Render only sector fills/labels — useful for transition overlays. */
   decorations?: boolean;
+  /** Level of detail used by the Canvas renderer. Defaults to `full`. */
+  detail?: CanvasRenderDetail;
   className?: string;
   style?: CSSProperties;
 }
@@ -20,25 +32,9 @@ function textAnchor(align: SectorTextStyle['align']): CanvasTextAlign {
   return align === 'start' ? 'left' : align === 'end' ? 'right' : 'center';
 }
 
-function viewBoxFontSize(value: SectorTextStyle['fontSize']): number {
-  if (typeof value === 'number') return Math.max(0.1, value);
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? Math.max(0.1, parsed) : 3.4;
-}
-
-function cssShadow(shadow: ShadowStyle): string | undefined {
-  if (!shadow.color || shadow.color === 'transparent' || shadow.blur <= 0) return undefined;
-  return `drop-shadow(${shadow.offsetX}px ${shadow.offsetY}px ${shadow.blur}px ${shadow.color})`;
-}
-
 function sectorImage(item: WheelItem): WheelSectorImage | undefined {
   if (!item.image) return undefined;
   return typeof item.image === 'string' ? { src: item.image } : item.image;
-}
-
-function imagePreserveAspectRatio(image: WheelSectorImage): string {
-  if (image.fit === 'stretch') return 'none';
-  return image.fit === 'contain' ? 'xMidYMid meet' : 'xMidYMid slice';
 }
 
 function imageScale(image: WheelSectorImage): number {
@@ -57,22 +53,6 @@ function imageRotation(image: WheelSectorImage): number {
 function imageOffset(image: WheelSectorImage, axis: 'X' | 'Y'): number {
   const value = axis === 'X' ? image.offsetX : image.offsetY;
   return finiteNumber(value);
-}
-
-function imageTransform(image: WheelSectorImage): string {
-  const offsetX = imageOffset(image, 'X');
-  const offsetY = imageOffset(image, 'Y');
-  return `translate(${offsetX} ${offsetY}) translate(50 50) rotate(${imageRotation(image)}) scale(${imageScale(image)}) translate(-50 -50)`;
-}
-
-function labelPoint(text: SectorTextStyle, sector: Sector): { x: number; y: number; rotation: number } {
-  const mid = sector.start + sector.angle / 2;
-  const point = polar(labelRadius(text, 50), mid);
-  return {
-    x: point.x + text.offsetX,
-    y: point.y + text.offsetY,
-    rotation: text.orientation === 'radial' ? mid : text.orientation === 'tangential' ? mid + 90 : 0,
-  };
 }
 
 function labelRadius(text: SectorTextStyle, wheelRadius: number): number {
@@ -96,100 +76,6 @@ function colorAt<T>(sector: Sector<T>, theme: WheelTheme): string {
   return sector.item.color ?? theme.sector.colors[sector.index % theme.sector.colors.length] ?? theme.background;
 }
 
-function shouldShowSvgLabel<T>(sector: Sector<T>, minLabelAngle: number): boolean {
-  return sector.angle >= minLabelAngle;
-}
-
-let measureContext: CanvasRenderingContext2D | null | undefined;
-
-function measureTextWidth(value: string, font: string, fallbackFontSize: number): number {
-  if (measureContext === undefined && typeof document !== 'undefined') {
-    measureContext = document.createElement('canvas').getContext('2d');
-  }
-  if (measureContext) {
-    measureContext.font = font;
-    return measureContext.measureText(value).width;
-  }
-  return value.length * fallbackFontSize * 0.58;
-}
-
-function fitSvgLabel(
-  text: SectorTextStyle,
-  sector: Sector,
-): { label: string; fontSize: number } | null {
-  const fontSize = viewBoxFontSize(text.fontSize);
-  const radius = labelRadius(text, 50);
-  const availableWidth = text.orientation === 'radial'
-    ? radialLabelWidth(text, radius, 50)
-    : Math.max(0, radius * ((sector.angle * Math.PI) / 180) * 0.76);
-  const maxWidth = text.maxWidth === undefined ? availableWidth : Math.max(0, text.maxWidth);
-  if (maxWidth < fontSize * 1.4) return null;
-  const font = `${text.fontWeight} ${fontSize}px ${text.fontFamily}`;
-  const width = measureTextWidth(sector.item.label, font, fontSize);
-  if (width <= maxWidth) return { label: sector.item.label, fontSize };
-  if (text.overflow === 'hide') return null;
-  if (text.overflow === 'shrink') {
-    return { label: sector.item.label, fontSize: Math.max(fontSize * 0.55, fontSize * (maxWidth / width)) };
-  }
-  const suffix = '…';
-  let end = sector.item.label.length;
-  while (end > 0 && measureTextWidth(`${sector.item.label.slice(0, end)}${suffix}`, font, fontSize) > maxWidth) end -= 1;
-  return end > 0 ? { label: `${sector.item.label.slice(0, end)}${suffix}`, fontSize } : null;
-}
-
-/** SVG keeps per-sector DOM access and is the most customisable renderer. */
-export function WheelSvgRenderer<T>({ sectors, theme, minLabelAngle, highlightedItemId, decorations = true, className, style }: WheelDrawingProps<T>) {
-  const rendererId = useId().replace(/:/g, '');
-  return (
-    <svg className={['wheel__svg', className].filter(Boolean).join(' ')} style={style} viewBox="0 0 100 100" aria-hidden="true">
-      {decorations && <circle cx="50" cy="50" r="50" fill={theme.background} />}
-      {sectors.map((sector) => {
-        const text = { ...theme.text, ...sector.item.text };
-        const label = labelPoint(text, sector);
-        const anchor = text.align === 'start' ? 'start' : text.align === 'end' ? 'end' : 'middle';
-        const image = sectorImage(sector.item);
-        const clipId = `wheel-sector-${rendererId}-${sector.index}-${sector.item.id.replace(/[^a-zA-Z0-9_-]/g, '')}`;
-        const fittedLabel = shouldShowSvgLabel(sector, minLabelAngle) ? fitSvgLabel(text, sector) : null;
-        const labelShadow = cssShadow(text.shadow);
-        return (
-          <g key={sector.item.id} className={['wheel__sector', sector.item.id === highlightedItemId && 'wheel__sector--highlighted'].filter(Boolean).join(' ')}>
-            <defs><clipPath id={clipId}><path d={wedgePath(sector.start, sector.end)} /></clipPath></defs>
-            <path d={wedgePath(sector.start, sector.end)} fill={colorAt(sector, theme)} />
-            <g clipPath={`url(#${clipId})`}>
-              {image?.src && <image href={image.src} x="0" y="0" width="100" height="100" opacity={Math.min(Math.max(image.opacity ?? 1, 0), 1)} preserveAspectRatio={imagePreserveAspectRatio(image)} transform={imageTransform(image)} />}
-              {fittedLabel && (
-                <text
-                  x={label.x}
-                  y={label.y}
-                  fill={text.color}
-                  stroke={text.strokeWidth > 0 ? text.strokeColor : undefined}
-                  strokeWidth={text.strokeWidth > 0 ? text.strokeWidth : undefined}
-                  fontFamily={text.fontFamily}
-                  fontSize={fittedLabel.fontSize}
-                  fontWeight={text.fontWeight}
-                  textAnchor={anchor}
-                  dominantBaseline="middle"
-                  transform={`rotate(${label.rotation} ${label.x} ${label.y})`}
-                  style={labelShadow ? { filter: labelShadow } : undefined}
-                >
-                  {fittedLabel.label}
-                </text>
-              )}
-            </g>
-          </g>
-        );
-      })}
-      {decorations && sectors.length > 1 && sectors.map((sector) => {
-        if (sector.angle < MIN_DIVIDER_ANGLE) return null;
-        const point = polar(50, sector.start);
-        const shadow = cssShadow(theme.dividers.shadow);
-        return <line key={`divider-${sector.item.id}`} x1="50" y1="50" x2={point.x} y2={point.y} stroke={theme.dividers.color} strokeWidth={theme.dividers.width} style={shadow ? { filter: shadow } : undefined} />;
-      })}
-      {decorations && <circle cx="50" cy="50" r={50 - theme.border.width / 2} fill="none" stroke={theme.border.color} strokeWidth={theme.border.width} />}
-    </svg>
-  );
-}
-
 function canvasFontSize(value: SectorTextStyle['fontSize'], size: number): number {
   if (typeof value === 'number') return Math.max(1, (value / 100) * size);
   const parsed = Number.parseFloat(value);
@@ -197,21 +83,44 @@ function canvasFontSize(value: SectorTextStyle['fontSize'], size: number): numbe
   return value.trim().endsWith('px') ? Math.max(1, parsed) : Math.max(1, (parsed / 100) * size);
 }
 
-function useSectorImages<T>(sectors: readonly Sector<T>[]): { images: Map<string, HTMLImageElement>; version: number } {
-  const images = useRef(new Map<string, HTMLImageElement>());
+const sectorImageCache = new Map<string, HTMLImageElement>();
+
+/**
+ * Images are shared by every Canvas instance. This avoids starting a second
+ * network request when the same item is temporarily rendered in a transition
+ * layer, while every active renderer still redraws once its image is ready.
+ */
+function useSectorImages<T>(sectors: readonly Sector<T>[]): { images: ReadonlyMap<string, HTMLImageElement>; version: number } {
   const [version, setVersion] = useState(0);
-  const sources = sectors.map((sector) => sectorImage(sector.item)?.src ?? '').filter(Boolean).join('\u0001');
+  const sources = useMemo(
+    () => [...new Set(sectors.map((sector) => sectorImage(sector.item)?.src).filter((source): source is string => Boolean(source)))],
+    [sectors],
+  );
+  const sourcesKey = sources.join('\u0001');
+
   useEffect(() => {
-    for (const source of new Set(sources.split('\u0001').filter(Boolean))) {
-      if (images.current.has(source)) continue;
-      const image = new Image();
-      image.decoding = 'async';
-      image.addEventListener('load', () => setVersion((current) => current + 1), { once: true });
-      image.src = source;
-      images.current.set(source, image);
+    const cleanup: Array<() => void> = [];
+    for (const source of sources) {
+      let image = sectorImageCache.get(source);
+      if (!image) {
+        image = new Image();
+        image.decoding = 'async';
+        image.src = source;
+        sectorImageCache.set(source, image);
+      }
+      if (image.complete) continue;
+      const redraw = () => setVersion((current) => current + 1);
+      image.addEventListener('load', redraw, { once: true });
+      image.addEventListener('error', redraw, { once: true });
+      cleanup.push(() => {
+        image?.removeEventListener('load', redraw);
+        image?.removeEventListener('error', redraw);
+      });
     }
-  }, [sources]);
-  return { images: images.current, version };
+    return () => cleanup.forEach((dispose) => dispose());
+  }, [sources, sourcesKey]);
+
+  return { images: sectorImageCache, version };
 }
 
 function drawImageInWheel(ctx: CanvasRenderingContext2D, image: HTMLImageElement, dimension: number, fit: WheelSectorImage['fit'], config: WheelSectorImage) {
@@ -244,195 +153,546 @@ function applyCanvasShadow(ctx: CanvasRenderingContext2D, shadow: ShadowStyle, d
   ctx.shadowOffsetY = (shadow.offsetY / 100) * dimension;
 }
 
-function ellipseLabel(ctx: CanvasRenderingContext2D, value: string, maxWidth: number): string {
-  const suffix = '…';
-  let end = value.length;
-  while (end > 0 && ctx.measureText(`${value.slice(0, end)}${suffix}`).width > maxWidth) end -= 1;
-  return end > 0 ? `${value.slice(0, end)}${suffix}` : '';
+interface CanvasMetrics {
+  width: number;
+  height: number;
+  dpr: number;
 }
 
-function fitCanvasLabel(
-  ctx: CanvasRenderingContext2D,
-  label: string,
-  maxWidth: number,
-  overflow: SectorTextStyle['overflow'],
-  fontSize: number,
-): { label: string; fontSize: number } | null {
-  if (maxWidth < 12) return null;
-  const width = ctx.measureText(label).width;
-  if (width <= maxWidth) return { label, fontSize };
-  if (overflow === 'hide') return null;
-  if (overflow === 'ellipsis') {
-    const shortened = ellipseLabel(ctx, label, maxWidth);
-    return shortened ? { label: shortened, fontSize } : null;
-  }
-  return { label, fontSize: Math.max(fontSize * 0.55, fontSize * (maxWidth / width)) };
+interface CanvasSurface {
+  ctx: CanvasRenderingContext2D;
+  dimension: number;
+  dpr: number;
 }
 
-function useCanvasSize(ref: RefObject<HTMLCanvasElement | null>) {
-  const [size, setSize] = useState({ width: 0, height: 0 });
+interface PreparedCanvasSector<T> {
+  sector: Sector<T>;
+  color: string;
+  text: SectorTextStyle;
+  image?: WheelSectorImage;
+  startRadians: number;
+  endRadians: number;
+  midRadians: number;
+  midAngle: number;
+  dividerX: number;
+  dividerY: number;
+}
+
+interface FittedCanvasLabel {
+  label: string;
+  font: string;
+  fontSize: number;
+}
+
+interface CanvasTextCache {
+  measurements: Map<string, number>;
+  labels: Map<string, FittedCanvasLabel | null>;
+}
+
+interface BaseBitmapCache<T> {
+  canvas: HTMLCanvasElement;
+  prepared: readonly PreparedCanvasSector<T>[];
+  theme: WheelTheme;
+  minLabelAngle: number;
+  decorations: boolean;
+  detail: CanvasRenderDetail;
+  imageVersion: number;
+  dimension: number;
+  dpr: number;
+}
+
+function useCanvasMetrics(ref: RefObject<HTMLCanvasElement | null>, maxCanvasDpr: number): CanvasMetrics {
+  const [metrics, setMetrics] = useState<CanvasMetrics>({ width: 0, height: 0, dpr: 1 });
+
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
+    const dprCap = Number.isFinite(maxCanvasDpr) ? Math.max(1, maxCanvasDpr) : 2;
     const measure = () => {
       const rect = element.getBoundingClientRect();
       const width = Math.round(rect.width);
       const height = Math.round(rect.height);
-      setSize((current) => current.width === width && current.height === height ? current : { width, height });
+      const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), dprCap);
+      setMetrics((current) => current.width === width && current.height === height && current.dpr === dpr
+        ? current
+        : { width, height, dpr });
     };
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref]);
-  return size;
+
+    let dprQuery: MediaQueryList | undefined;
+    const watchDpr = () => {
+      dprQuery?.removeEventListener('change', watchDpr);
+      measure();
+      dprQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+      dprQuery?.addEventListener('change', watchDpr);
+    };
+
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    observer?.observe(element);
+    window.addEventListener('resize', measure);
+    watchDpr();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      dprQuery?.removeEventListener('change', watchDpr);
+    };
+  }, [maxCanvasDpr, ref]);
+
+  return metrics;
 }
 
-/**
- * Canvas renderer for dense wheels. It keeps a single drawing surface and
- * automatically removes labels/dividers that cannot be legible at this size.
- */
-export function WheelCanvasRenderer<T>({ sectors, theme, minLabelAngle, highlightedItemId, decorations = true, className, style, maxCanvasDpr = 2 }: WheelDrawingProps<T> & { maxCanvasDpr?: number }) {
+function prepareCanvas(canvas: HTMLCanvasElement, dimension: number, dpr: number): CanvasSurface | null {
+  const bitmapDimension = Math.max(1, Math.round(dimension * dpr));
+  if (canvas.width !== bitmapDimension || canvas.height !== bitmapDimension) {
+    canvas.width = bitmapDimension;
+    canvas.height = bitmapDimension;
+  }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, dimension, dpr };
+}
+
+function prepareCanvasSectors<T>(sectors: readonly Sector<T>[], theme: WheelTheme): PreparedCanvasSector<T>[] {
+  return sectors.map((sector) => {
+    const startRadians = (sector.start * Math.PI) / 180;
+    const endRadians = (sector.end * Math.PI) / 180;
+    const midAngle = sector.start + sector.angle / 2;
+    const midRadians = (midAngle * Math.PI) / 180;
+    return {
+      sector,
+      color: colorAt(sector, theme),
+      text: { ...theme.text, ...sector.item.text },
+      image: sectorImage(sector.item),
+      startRadians,
+      endRadians,
+      midRadians,
+      midAngle,
+      dividerX: Math.cos(startRadians),
+      dividerY: Math.sin(startRadians),
+    };
+  });
+}
+
+function drawSectorPath<T>(ctx: CanvasRenderingContext2D, sector: PreparedCanvasSector<T>, center: number, radius: number) {
+  ctx.beginPath();
+  ctx.moveTo(center, center);
+  ctx.arc(center, center, radius, sector.startRadians, sector.endRadians);
+  ctx.closePath();
+}
+
+function drawBackground(ctx: CanvasRenderingContext2D, dimension: number, theme: WheelTheme) {
+  const center = dimension / 2;
+  ctx.beginPath();
+  ctx.arc(center, center, center, 0, Math.PI * 2);
+  ctx.fillStyle = theme.background;
+  ctx.fill();
+}
+
+function drawSectorFills<T>(ctx: CanvasRenderingContext2D, sectors: readonly PreparedCanvasSector<T>[], dimension: number) {
+  const center = dimension / 2;
+  for (const sector of sectors) {
+    drawSectorPath(ctx, sector, center, center);
+    ctx.fillStyle = sector.color;
+    ctx.fill();
+  }
+}
+
+function drawSectorImages<T>(ctx: CanvasRenderingContext2D, sectors: readonly PreparedCanvasSector<T>[], dimension: number, images: ReadonlyMap<string, HTMLImageElement>) {
+  const center = dimension / 2;
+  for (const sector of sectors) {
+    const imageConfig = sector.image;
+    const image = imageConfig?.src ? images.get(imageConfig.src) : undefined;
+    if (!imageConfig || !image?.complete || !image.naturalWidth || !image.naturalHeight) continue;
+    ctx.save();
+    drawSectorPath(ctx, sector, center, center);
+    ctx.clip();
+    ctx.globalAlpha = Math.min(Math.max(imageConfig.opacity ?? 1, 0), 1);
+    drawImageInWheel(ctx, image, dimension, imageConfig.fit ?? 'cover', imageConfig);
+    ctx.restore();
+  }
+}
+
+function drawDividers<T>(ctx: CanvasRenderingContext2D, sectors: readonly PreparedCanvasSector<T>[], dimension: number, theme: WheelTheme, withShadows = true) {
+  if (sectors.length <= 1 || theme.dividers.width <= 0) return;
+  const center = dimension / 2;
+  let hasDividers = false;
+  ctx.save();
+  ctx.beginPath();
+  for (const sector of sectors) {
+    if (sector.sector.angle < MIN_DIVIDER_ANGLE) continue;
+    ctx.moveTo(center, center);
+    ctx.lineTo(center + center * sector.dividerX, center + center * sector.dividerY);
+    hasDividers = true;
+  }
+  if (hasDividers) {
+    ctx.strokeStyle = theme.dividers.color;
+    ctx.lineWidth = (theme.dividers.width / 100) * dimension;
+    if (withShadows) applyCanvasShadow(ctx, theme.dividers.shadow, dimension);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBorder(ctx: CanvasRenderingContext2D, dimension: number, theme: WheelTheme, withShadow = true) {
+  if (theme.border.width <= 0) return;
+  const center = dimension / 2;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(center, center, center - (theme.border.width / 100) * dimension / 2, 0, Math.PI * 2);
+  ctx.strokeStyle = theme.border.color;
+  ctx.lineWidth = (theme.border.width / 100) * dimension;
+  if (withShadow) applyCanvasShadow(ctx, theme.border.shadow, dimension);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function cacheValue<T>(cache: Map<string, T>, key: string, value: T): T {
+  if (cache.size > 4_000) cache.clear();
+  cache.set(key, value);
+  return value;
+}
+
+function measureCachedText(ctx: CanvasRenderingContext2D, cache: CanvasTextCache, font: string, value: string): number {
+  const key = `${font}\u0000${value}`;
+  const cached = cache.measurements.get(key);
+  if (cached !== undefined) return cached;
+  ctx.font = font;
+  return cacheValue(cache.measurements, key, ctx.measureText(value).width);
+}
+
+function ellipsizeCanvasLabel(ctx: CanvasRenderingContext2D, cache: CanvasTextCache, value: string, font: string, maxWidth: number): string {
+  const suffix = '…';
+  let end = value.length;
+  while (end > 0 && measureCachedText(ctx, cache, font, `${value.slice(0, end)}${suffix}`) > maxWidth) end -= 1;
+  return end > 0 ? `${value.slice(0, end)}${suffix}` : '';
+}
+
+function fitCachedCanvasLabel(
+  ctx: CanvasRenderingContext2D,
+  cache: CanvasTextCache,
+  key: string,
+  label: string,
+  maxWidth: number,
+  overflow: SectorTextStyle['overflow'],
+  font: string,
+  fontSize: number,
+  fontWeight: SectorTextStyle['fontWeight'],
+  fontFamily: string,
+): FittedCanvasLabel | null {
+  const cached = cache.labels.get(key);
+  if (cached !== undefined) return cached;
+  let fitted: FittedCanvasLabel | null = null;
+  if (maxWidth >= 12) {
+    const width = measureCachedText(ctx, cache, font, label);
+    if (width <= maxWidth) fitted = { label, font, fontSize };
+    else if (overflow === 'ellipsis') {
+      const shortened = ellipsizeCanvasLabel(ctx, cache, label, font, maxWidth);
+      if (shortened) fitted = { label: shortened, font, fontSize };
+    } else if (overflow === 'shrink') {
+      const shrunkSize = Math.max(fontSize * 0.55, fontSize * (maxWidth / width));
+      fitted = { label, font: `${fontWeight} ${shrunkSize}px ${fontFamily}`, fontSize: shrunkSize };
+    }
+  }
+  return cacheValue(cache.labels, key, fitted);
+}
+
+function drawLabels<T>(
+  ctx: CanvasRenderingContext2D,
+  sectors: readonly PreparedCanvasSector<T>[],
+  dimension: number,
+  minLabelAngle: number,
+  cache: CanvasTextCache,
+) {
+  const center = dimension / 2;
+  for (const sector of sectors) {
+    if (sector.sector.angle < minLabelAngle) continue;
+    const { text } = sector;
+    const fontSize = canvasFontSize(text.fontSize, dimension);
+    const font = `${text.fontWeight} ${fontSize}px ${text.fontFamily}`;
+    const labelPositionRadius = labelRadius(text, center);
+    const arcLength = (sector.sector.angle / 360) * Math.PI * 2 * labelPositionRadius;
+    const maxWidth = text.maxWidth === undefined
+      ? text.orientation === 'radial'
+        ? radialLabelWidth(text, labelPositionRadius, center)
+        : Math.max(0, arcLength * 0.78)
+      : (text.maxWidth / 100) * dimension;
+    const labelKey = [
+      dimension,
+      sector.sector.item.id,
+      sector.sector.item.label,
+      sector.sector.start,
+      sector.sector.end,
+      maxWidth,
+      font,
+      text.overflow,
+    ].join('\u0001');
+    const fitted = fitCachedCanvasLabel(
+      ctx,
+      cache,
+      labelKey,
+      sector.sector.item.label,
+      maxWidth,
+      text.overflow,
+      font,
+      fontSize,
+      text.fontWeight,
+      text.fontFamily,
+    );
+    if (!fitted) continue;
+    ctx.save();
+    drawSectorPath(ctx, sector, center, center);
+    ctx.clip();
+    ctx.font = fitted.font;
+    ctx.fillStyle = text.color;
+    ctx.textAlign = textAnchor(text.align);
+    ctx.textBaseline = 'middle';
+    ctx.translate(
+      center + labelPositionRadius * Math.cos(sector.midRadians) + (text.offsetX / 100) * dimension,
+      center + labelPositionRadius * Math.sin(sector.midRadians) + (text.offsetY / 100) * dimension,
+    );
+    const rotation = text.orientation === 'radial' ? sector.midAngle : text.orientation === 'tangential' ? sector.midAngle + 90 : 0;
+    ctx.rotate((rotation * Math.PI) / 180);
+    applyCanvasShadow(ctx, text.shadow, dimension);
+    ctx.fillText(fitted.label, 0, 0, maxWidth);
+    if (text.strokeWidth > 0) {
+      ctx.strokeStyle = text.strokeColor;
+      ctx.lineWidth = (text.strokeWidth / 100) * dimension;
+      ctx.lineJoin = 'round';
+      ctx.strokeText(fitted.label, 0, 0, maxWidth);
+    }
+    ctx.restore();
+  }
+}
+
+function drawCanvasFrame<T>(
+  ctx: CanvasRenderingContext2D,
+  sectors: readonly PreparedCanvasSector<T>[],
+  dimension: number,
+  theme: WheelTheme,
+  minLabelAngle: number,
+  decorations: boolean,
+  detail: CanvasRenderDetail,
+  images: ReadonlyMap<string, HTMLImageElement>,
+  textCache: CanvasTextCache,
+) {
+  ctx.clearRect(0, 0, dimension, dimension);
+  if (decorations) drawBackground(ctx, dimension, theme);
+  drawSectorFills(ctx, sectors, dimension);
+  if (detail === 'full') {
+    drawSectorImages(ctx, sectors, dimension, images);
+    drawLabels(ctx, sectors, dimension, minLabelAngle, textCache);
+  } else if (detail === 'dense') {
+    drawLabels(ctx, sectors, dimension, minLabelAngle, textCache);
+  }
+  if (decorations) {
+    const simplified = detail === 'transition';
+    drawDividers(ctx, sectors, dimension, theme, !simplified);
+    drawBorder(ctx, dimension, theme, !simplified);
+  }
+}
+
+function drawHighlight<T>(ctx: CanvasRenderingContext2D, sectors: readonly Sector<T>[], dimension: number, highlightedItemId: string | undefined, highlightStyle?: Partial<WheelHighlightStyle>) {
+  if (!highlightedItemId) return;
+  const highlighted = sectors.find((sector) => sector.item.id === highlightedItemId);
+  if (!highlighted) return;
+  const center = dimension / 2;
+  const resolved = { ...DEFAULT_HIGHLIGHT_STYLE, ...highlightStyle };
+  ctx.save();
+  ctx.globalCompositeOperation = resolved.blendMode ?? 'source-over';
+  ctx.globalAlpha = Math.min(Math.max(resolved.opacity, 0), 1);
+  ctx.beginPath();
+  ctx.moveTo(center, center);
+  ctx.arc(center, center, center, (highlighted.start * Math.PI) / 180, (highlighted.end * Math.PI) / 180);
+  ctx.closePath();
+  ctx.fillStyle = resolved.color;
+  ctx.fill();
+  ctx.restore();
+}
+
+function CanvasHighlightRenderer<T>({
+  sectors,
+  highlightedItemId,
+  highlightStyle,
+  maxCanvasDpr,
+  onCanvasDraw,
+}: Pick<WheelDrawingProps<T>, 'sectors' | 'highlightedItemId' | 'highlightStyle' | 'onCanvasDraw'> & { maxCanvasDpr: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const size = useCanvasSize(ref);
-  const { images, version: imageVersion } = useSectorImages(sectors);
+  const metrics = useCanvasMetrics(ref, maxCanvasDpr);
 
   useEffect(() => {
     const canvas = ref.current;
-    const dimension = Math.min(size.width, size.height);
+    const dimension = Math.min(metrics.width, metrics.height);
     if (!canvas || dimension <= 0) return;
-    const dprCap = Number.isFinite(maxCanvasDpr) ? Math.max(1, maxCanvasDpr) : 2;
-    const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), dprCap);
-    const bitmap = Math.max(1, Math.round(dimension * dpr));
-    if (canvas.width !== bitmap || canvas.height !== bitmap) {
-      canvas.width = bitmap;
-      canvas.height = bitmap;
-    }
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, dimension, dimension);
+    const surface = prepareCanvas(canvas, dimension, metrics.dpr);
+    if (!surface) return;
+    surface.ctx.clearRect(0, 0, dimension, dimension);
+    drawHighlight(surface.ctx, sectors, dimension, highlightedItemId, highlightStyle);
+    onCanvasDraw?.({ layer: 'highlight', detail: 'full' });
+  }, [highlightStyle, highlightedItemId, metrics, onCanvasDraw, sectors]);
 
-    const center = dimension / 2;
-    const radius = dimension / 2;
-    if (decorations) {
-      ctx.beginPath();
-      ctx.arc(center, center, radius, 0, Math.PI * 2);
-      ctx.fillStyle = theme.background;
-      ctx.fill();
-    }
-
-    for (const sector of sectors) {
-      ctx.beginPath();
-      ctx.moveTo(center, center);
-      ctx.arc(center, center, radius, (sector.start * Math.PI) / 180, (sector.end * Math.PI) / 180);
-      ctx.closePath();
-      ctx.fillStyle = colorAt(sector, theme);
-      ctx.fill();
-    }
-
-    for (const sector of sectors) {
-      const imageConfig = sectorImage(sector.item);
-      const image = imageConfig?.src ? images.get(imageConfig.src) : undefined;
-      if (!image?.complete || !imageConfig) continue;
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(center, center);
-      ctx.arc(center, center, radius, (sector.start * Math.PI) / 180, (sector.end * Math.PI) / 180);
-      ctx.closePath();
-      ctx.clip();
-      ctx.globalAlpha = Math.min(Math.max(imageConfig.opacity ?? 1, 0), 1);
-      drawImageInWheel(ctx, image, dimension, imageConfig.fit ?? 'cover', imageConfig);
-      ctx.restore();
-    }
-
-    const highlighted = highlightedItemId ? sectors.find((sector) => sector.item.id === highlightedItemId) : undefined;
-    if (highlighted) {
-      ctx.beginPath();
-      ctx.moveTo(center, center);
-      ctx.arc(center, center, radius, (highlighted.start * Math.PI) / 180, (highlighted.end * Math.PI) / 180);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
-      ctx.fill();
-    }
-
-    if (decorations && sectors.length > 1 && theme.dividers.width > 0) {
-      ctx.save();
-      ctx.strokeStyle = theme.dividers.color;
-      ctx.lineWidth = (theme.dividers.width / 100) * dimension;
-      applyCanvasShadow(ctx, theme.dividers.shadow, dimension);
-      for (const sector of sectors) {
-        if (sector.angle < MIN_DIVIDER_ANGLE) continue;
-        const radians = (sector.start * Math.PI) / 180;
-        ctx.beginPath();
-        ctx.moveTo(center, center);
-        ctx.lineTo(center + radius * Math.cos(radians), center + radius * Math.sin(radians));
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    for (const sector of sectors) {
-      const text = { ...theme.text, ...sector.item.text };
-      // Keep Canvas in sync with SVG: a sector below the legibility threshold
-      // never renders a label, regardless of its overflow strategy.
-      if (sector.angle < minLabelAngle) continue;
-      const fontSize = canvasFontSize(text.fontSize, dimension);
-      const mid = sector.start + sector.angle / 2;
-      const labelPositionRadius = labelRadius(text, radius);
-      const arcLength = (sector.angle / 360) * Math.PI * 2 * labelPositionRadius;
-      const maxWidth = text.maxWidth === undefined
-        ? text.orientation === 'radial'
-          ? radialLabelWidth(text, labelPositionRadius, radius)
-          : Math.max(0, arcLength * 0.78)
-        : (text.maxWidth / 100) * dimension;
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(center, center);
-      ctx.arc(center, center, radius, (sector.start * Math.PI) / 180, (sector.end * Math.PI) / 180);
-      ctx.closePath();
-      ctx.clip();
-      ctx.font = `${text.fontWeight} ${fontSize}px ${text.fontFamily}`;
-      const fitted = fitCanvasLabel(ctx, sector.item.label, maxWidth, text.overflow, fontSize);
-      if (!fitted) {
-        ctx.restore();
-        continue;
-      }
-      ctx.font = `${text.fontWeight} ${fitted.fontSize}px ${text.fontFamily}`;
-      ctx.fillStyle = text.color;
-      ctx.textAlign = textAnchor(text.align);
-      ctx.textBaseline = 'middle';
-      const radians = (mid * Math.PI) / 180;
-      ctx.translate(
-        center + labelPositionRadius * Math.cos(radians) + (text.offsetX / 100) * dimension,
-        center + labelPositionRadius * Math.sin(radians) + (text.offsetY / 100) * dimension,
-      );
-      const rotation = text.orientation === 'radial' ? mid : text.orientation === 'tangential' ? mid + 90 : 0;
-      ctx.rotate((rotation * Math.PI) / 180);
-      applyCanvasShadow(ctx, text.shadow, dimension);
-      ctx.fillText(fitted.label, 0, 0, maxWidth);
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      if (text.strokeWidth > 0) {
-        ctx.strokeStyle = text.strokeColor;
-        ctx.lineWidth = (text.strokeWidth / 100) * dimension;
-        ctx.lineJoin = 'round';
-        ctx.strokeText(fitted.label, 0, 0, maxWidth);
-      }
-      ctx.restore();
-    }
-
-    if (decorations && theme.border.width > 0) {
-      ctx.beginPath();
-      ctx.arc(center, center, radius - (theme.border.width / 100) * dimension / 2, 0, Math.PI * 2);
-      ctx.strokeStyle = theme.border.color;
-      ctx.lineWidth = (theme.border.width / 100) * dimension;
-      ctx.stroke();
-    }
-  }, [decorations, highlightedItemId, imageVersion, images, maxCanvasDpr, minLabelAngle, sectors, size, theme]);
-
-  return <canvas ref={ref} className={['wheel__canvas', className].filter(Boolean).join(' ')} style={style} aria-hidden="true" />;
+  return <canvas ref={ref} className="wheel__canvas wheel__canvas--highlight" aria-hidden="true" />;
 }
+
+function shouldRebuildBase<T>(
+  cache: BaseBitmapCache<T> | null,
+  prepared: readonly PreparedCanvasSector<T>[],
+  theme: WheelTheme,
+  minLabelAngle: number,
+  decorations: boolean,
+  detail: CanvasRenderDetail,
+  imageVersion: number,
+  dimension: number,
+  dpr: number,
+): boolean {
+  return !cache
+    || cache.prepared !== prepared
+    || cache.theme !== theme
+    || cache.minLabelAngle !== minLabelAngle
+    || cache.decorations !== decorations
+    || cache.detail !== detail
+    || cache.imageVersion !== imageVersion
+    || cache.dimension !== dimension
+    || cache.dpr !== dpr;
+}
+
+export interface WheelCanvasTransitionProps<T> {
+  from: readonly Sector<T>[];
+  to: readonly Sector<T>[];
+  theme: WheelTheme;
+  minLabelAngle: number;
+  duration: number;
+  easing: string;
+  /** `transition` skips labels, images and shadows for the 51–150 sector LOD. */
+  detail: Extract<CanvasRenderDetail, 'full' | 'transition'>;
+  decorations?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  maxCanvasDpr?: number;
+  onCanvasDraw?: (event: WheelCanvasDrawEvent) => void;
+}
+
+/**
+ * Imperative Canvas collapse. Progress stays in the animation loop, not in
+ * React state, so the sector list is never reconciled once per animation frame.
+ */
+function WheelCanvasTransitionRendererInner<T>({
+  from,
+  to,
+  theme,
+  minLabelAngle,
+  duration,
+  easing,
+  detail,
+  decorations = true,
+  className,
+  style,
+  maxCanvasDpr = 2,
+  onCanvasDraw,
+}: WheelCanvasTransitionProps<T>) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const metrics = useCanvasMetrics(ref, maxCanvasDpr);
+  const imageSectors = useMemo(() => [...from, ...to], [from, to]);
+  const { images, version: imageVersion } = useSectorImages(imageSectors);
+  const textCacheRef = useRef<CanvasTextCache>({ measurements: new Map(), labels: new Map() });
+
+  useEffect(() => {
+    const canvas = ref.current;
+    const dimension = Math.min(metrics.width, metrics.height);
+    if (!canvas || dimension <= 0) return;
+    let frame = 0;
+    let startedAt: number | undefined;
+    let lastDrawAt = -Infinity;
+    const minimumFrameTime = detail === 'transition' ? 1000 / 30 : 1000 / 60;
+
+    const draw = (progress: number) => {
+      const surface = prepareCanvas(canvas, dimension, metrics.dpr);
+      if (!surface) return;
+      const sectors = prepareCanvasSectors(interpolateSectors(from, to, easingProgress(progress, easing)), theme);
+      drawCanvasFrame(surface.ctx, sectors, dimension, theme, minLabelAngle, decorations, detail, images, textCacheRef.current);
+      onCanvasDraw?.({ layer: 'transition', detail });
+    };
+
+    const animate = (now: number) => {
+      startedAt ??= now;
+      const progress = Math.min(1, (now - startedAt) / Math.max(1, duration));
+      if (progress === 1 || now - lastDrawAt >= minimumFrameTime) {
+        draw(progress);
+        lastDrawAt = now;
+      }
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+
+    draw(0);
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [decorations, detail, duration, easing, from, imageVersion, images, metrics, minLabelAngle, onCanvasDraw, theme, to]);
+
+  return <canvas ref={ref} className={['wheel__canvas', className].filter(Boolean).join(' ')} style={{ backgroundColor: theme.background, borderRadius: '50%', ...style }} aria-hidden="true" />;
+}
+
+export const WheelCanvasTransitionRenderer = memo(WheelCanvasTransitionRendererInner) as typeof WheelCanvasTransitionRendererInner;
+
+function WheelCanvasRendererInner<T>({
+  sectors,
+  theme,
+  minLabelAngle,
+  highlightedItemId,
+  highlightStyle,
+  onCanvasDraw,
+  decorations = true,
+  detail = 'full',
+  className,
+  style,
+  maxCanvasDpr = 2,
+}: WheelDrawingProps<T> & { maxCanvasDpr?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const metrics = useCanvasMetrics(ref, maxCanvasDpr);
+  const { images, version: imageVersion } = useSectorImages(sectors);
+  const prepared = useMemo(() => prepareCanvasSectors(sectors, theme), [sectors, theme]);
+  const baseBitmapRef = useRef<BaseBitmapCache<T> | null>(null);
+  const textCacheRef = useRef<CanvasTextCache>({ measurements: new Map(), labels: new Map() });
+
+  useEffect(() => {
+    const canvas = ref.current;
+    const dimension = Math.min(metrics.width, metrics.height);
+    if (!canvas || dimension <= 0) return;
+    const surface = prepareCanvas(canvas, dimension, metrics.dpr);
+    if (!surface) return;
+
+    let base = baseBitmapRef.current;
+    if (shouldRebuildBase(base, prepared, theme, minLabelAngle, decorations, detail, imageVersion, dimension, metrics.dpr)) {
+      const bitmapCanvas = base?.canvas ?? document.createElement('canvas');
+      const bitmapSurface = prepareCanvas(bitmapCanvas, dimension, metrics.dpr);
+      if (!bitmapSurface) return;
+      drawCanvasFrame(bitmapSurface.ctx, prepared, dimension, theme, minLabelAngle, decorations, detail, images, textCacheRef.current);
+      base = {
+        canvas: bitmapCanvas,
+        prepared,
+        theme,
+        minLabelAngle,
+        decorations,
+        detail,
+        imageVersion,
+        dimension,
+        dpr: metrics.dpr,
+      };
+      baseBitmapRef.current = base;
+    }
+
+    if (!base) return;
+    surface.ctx.clearRect(0, 0, dimension, dimension);
+    surface.ctx.drawImage(base.canvas, 0, 0, dimension, dimension);
+    onCanvasDraw?.({ layer: 'base', detail });
+  }, [decorations, detail, imageVersion, images, metrics, minLabelAngle, onCanvasDraw, prepared, theme]);
+
+  return <>
+    <canvas ref={ref} className={['wheel__canvas', className].filter(Boolean).join(' ')} style={{ backgroundColor: theme.background, borderRadius: '50%', ...style }} aria-hidden="true" />
+    {highlightedItemId && <CanvasHighlightRenderer sectors={sectors} highlightedItemId={highlightedItemId} highlightStyle={highlightStyle} onCanvasDraw={onCanvasDraw} maxCanvasDpr={maxCanvasDpr} />}
+  </>;
+}
+
+/**
+ * Canvas renderer for dense wheels. The base wheel is cached as an offscreen
+ * bitmap, so a hover/highlight only composites that bitmap and its overlay.
+ */
+export const WheelCanvasRenderer = memo(WheelCanvasRendererInner) as typeof WheelCanvasRendererInner;

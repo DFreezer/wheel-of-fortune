@@ -6,5 +6,12 @@ export default defineConfig({
   build: {
     outDir: 'dist/playground',
     emptyOutDir: false,
+    rollupOptions: {
+      input: {
+        playground: 'index.html',
+        benchmark: 'benchmark.html',
+        visualFixtures: 'visual-fixtures.html',
+      },
+    },
   },
 });

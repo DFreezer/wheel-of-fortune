@@ -43,21 +43,17 @@
   animation-play-state: paused;
 }
 
-.wheel__svg {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
 .wheel__canvas {
   position: absolute;
   inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: 50%;
+}
+
+.wheel__canvas--highlight {
+  pointer-events: none;
 }
 
 .wheel__drawing--fadeOut,
@@ -124,6 +120,7 @@
 }
 
 .wheel__pointerContent {
+  --wheel-pointer-base-rotation: 0deg;
   display: grid;
   width: 100%;
   height: 100%;
@@ -132,7 +129,12 @@
 }
 
 .wheel__pointer--right .wheel__pointerContent {
-  transform: rotate(90deg);
+  --wheel-pointer-base-rotation: 90deg;
+  transform: rotate(var(--wheel-pointer-base-rotation));
+}
+
+.wheel__pointerContent--tick {
+  animation: wheel-pointer-tick 150ms ease-out;
 }
 
 .wheel__pointerContent > * {
@@ -150,11 +152,6 @@
   filter: drop-shadow(0 0.18rem 0.25rem rgba(15, 23, 42, 0.42));
 }
 
-.wheel__sector text { user-select: none; paint-order: stroke; }
-
-.wheel__sector--highlighted {
-  filter: brightness(1.16) saturate(1.12);
-}
 
 .wheel__srOnly {
   position: absolute;
@@ -169,10 +166,10 @@
 }
 
 @keyframes wheel-pointer-tick {
-  0% { transform: translateX(-50%) rotate(0deg); }
-  34% { transform: translateX(-50%) rotate(-19deg); }
-  72% { transform: translateX(-50%) rotate(5deg); }
-  100% { transform: translateX(-50%) rotate(0deg); }
+  0% { transform: rotate(var(--wheel-pointer-base-rotation)); }
+  34% { transform: rotate(calc(var(--wheel-pointer-base-rotation) - 19deg)); }
+  72% { transform: rotate(calc(var(--wheel-pointer-base-rotation) + 5deg)); }
+  100% { transform: rotate(var(--wheel-pointer-base-rotation)); }
 }
 
 @keyframes wheel-items-fade-out {

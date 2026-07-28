@@ -160,18 +160,3 @@ export function targetAngle<T>(sector: Sector<T>, landing: 'center' | 'random', 
   const offset = padding + (1 - padding * 2) * random;
   return sector.start + sector.angle * offset;
 }
-
-export function polar(radius: number, angle: number): { x: number; y: number } {
-  const radians = (angle * Math.PI) / 180;
-  return { x: 50 + radius * Math.cos(radians), y: 50 + radius * Math.sin(radians) };
-}
-
-export function wedgePath(start: number, end: number): string {
-  if (end - start >= 359.999) {
-    return 'M 50 50 m -50 0 a 50 50 0 1 0 100 0 a 50 50 0 1 0 -100 0';
-  }
-  const from = polar(50, start);
-  const to = polar(50, end);
-  const largeArc = end - start > 180 ? 1 : 0;
-  return `M 50 50 L ${from.x} ${from.y} A 50 50 0 ${largeArc} 1 ${to.x} ${to.y} Z`;
-}

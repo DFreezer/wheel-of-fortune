@@ -28,8 +28,7 @@ core/
 react/
   Wheel           responsive container and visual layers
   useWheel        imperative controller integration
-  SvgRenderer     fully customizable renderer
-  CanvasRenderer  dense renderer for large item collections
+  CanvasRenderer  renderer for every item collection
   media           image/SVG/GIF/WebM helpers
   audio           spin/tick/win sound handling
 ```
@@ -126,7 +125,7 @@ wheel-content    sectors, labels, dividers, and outer border
 
 `overlay`, `center`, and `pointer` accept `ReactNode`, so applications can use PNG, SVG, GIF, or WebM without a new library type. `WheelMedia` is a convenience helper that configures image and video elements with safe defaults.
 
-`centerSize` controls the center slot independently from its content. A sector image is clipped to the sector wedge and rendered above the color; transparent pixels keep the underlying fill visible. Both SVG and Canvas clip labels to the wedge and apply ellipsis before rendering when the available arc is too short.
+`centerSize` controls the center slot independently from its content. A sector image is clipped to the sector wedge and rendered above the color; transparent pixels keep the underlying fill visible. Canvas clips labels to the wedge and applies ellipsis before rendering when the available arc is too short.
 
 Customization has three levels:
 
@@ -176,15 +175,14 @@ Only one compositor-friendly layer should animate with `transform: rotate(...)`.
 
 Crossing a sector boundary emits `sectorPass`. It starts a short pointer animation with a backward deflection, a quick return, and a small overshoot. At high wheel speed, many boundaries can be crossed in one frame, so ticks are coalesced and rate-limited to prevent pointer and audio overload.
 
-Short, precise sounds are best handled by Web Audio API. Browsers require a user gesture to activate an audio context, so the docs should explain autoplay policy. Callbacks remain available for applications that provide their own audio engine.
+Short, precise sounds are handled by one Web Audio context with decoded buffers and short-lived source nodes. Browsers require a user gesture to activate an audio context, so the docs should explain autoplay policy. Callbacks remain available for applications that provide their own audio engine.
 
 ## 9. Item-list transitions
 
 When the wheel is idle, item changes use a shared transition configuration:
 
 - `crossfade` fades old geometry into the new geometry;
-- `collapse` interpolates stable sector boundaries, contracting removed sectors between neighbors and expanding added sectors from their shared boundary;
-- Canvas/dense mode falls back to a light `crossfade` to avoid animating hundreds of SVG paths;
+- `collapse` uses a Canvas level-of-detail policy: full redraws for small wheels, simplified redraws for medium wheels, and a light `crossfade` for large wheels;
 - labels remain attached to their current item geometry and stay clipped to the wedge.
 
 Per-frame custom animation for every sector is unnecessary for the first public release. A common mode, duration, and easing provide predictable performance. Changes during a spin use a stable snapshot and are applied after the spin by default; `itemsChangeBehavior: 'defer' | 'cancel-spin'` can make that policy explicit.
@@ -193,21 +191,19 @@ Per-frame custom animation for every sector is unnecessary for the first public 
 
 The root uses `aspect-ratio: 1`, while `size` is resolved relative to the container. `minSize`, `maxSize`, `className`, and `style` let the host application control layout with ordinary CSS.
 
-SVG uses a stable `viewBox`, so geometry scales without recalculation. A `ResizeObserver` tracks the container. Canvas multiplies the backing bitmap by `devicePixelRatio` with a configurable cap to avoid excessive 4K/Retina memory use.
+A `ResizeObserver` tracks the container. Canvas multiplies the backing bitmap by `devicePixelRatio` with a configurable cap to avoid excessive 4K/Retina memory use.
 
 ## 11. Dense mode for 100–1000+ items
 
 A thousand labels cannot be readable inside one circle. This is a presentation limit, not a selection or geometry limit, so the renderer uses level of detail (LOD) without changing probabilities:
 
-- SVG remains the default renderer for maximum customization;
-- Canvas is preferred for large collections;
-- `auto` selects the renderer from item count and render-slot complexity;
+- Canvas renders every collection size;
 - labels disappear when their arc or pixel length is too small;
 - dense mode can show only the selected/hovered item and an external name display;
 - dense dividers are omitted when they would become a solid ring;
 - hit testing uses angle lookup and binary search rather than one DOM node per item.
 
-An initial policy is SVG up to 100 items, SVG or Canvas from 100 to 300 with hidden small labels, and Canvas from 300 onward. The threshold should be confirmed with benchmarks that also consider wheel size, weights, and custom renderer complexity.
+Canvas uses the same implementation for all item counts. Its level-of-detail policy controls label and divider visibility without changing selection geometry or probability.
 
 ## 12. Accessibility
 
@@ -222,16 +218,17 @@ An initial policy is SVG up to 100 items, SVG or Canvas from 100 to 300 with hid
 
 ### Current status
 
-- geometry, React API, SVG, Web Animations, client/server winners, cancellable `resolveWinner`, pointer animation, and URL/file sounds are implemented;
-- controlled `crossfade` and geometric SVG `collapse` animate stable add/remove changes; Canvas uses the safe `crossfade` fallback;
-- `renderer="auto"` switches to Canvas from 300 sectors, caps bitmap DPR, applies LOD, and supports geometric hit testing in both renderers;
-- deterministic tests cover normalization, boundaries, weighted selection, landing, validation, and cancellation;
-- open work includes an external accessible dense-item list, browser lifecycle tests, performance benchmarks, and visual regression coverage.
+- geometry, React API, Canvas, Web Animations, client/server winners, cancellable `resolveWinner`, pointer animation, Web Audio, and URL/file sounds are implemented;
+- controlled `crossfade` and Canvas LOD `collapse` animate stable add/remove changes;
+- Canvas caps bitmap DPR, applies LOD, and supports geometric hit testing;
+- a semantic item list, Canvas highlight layer, and local performance benchmark are available;
+- deterministic tests cover normalization, boundaries, weighted selection, landing, validation, cancellation, and Canvas transition policy;
+- open work includes automated browser lifecycle and visual regression coverage.
 
 ### Release stages
 
 1. **Headless core** — public types, normalization, geometry, landing, and math tests.
-2. **React and SVG** — responsive container, sectors, labels, dividers, layers, controlled items, and examples.
+2. **React and Canvas** — responsive container, sectors, labels, dividers, layers, controlled items, and examples.
 3. **Spin, pointer, and audio** — easing, duration, sector-pass events, bounce, client/server modes, cancellation, and landing tests.
 4. **Dynamic items** — stable-ID diffing, reorder policies, snapshots, and rapid-update tests.
 5. **Dense mode** — Canvas, DPR scaling, LOD, DOM-free hit testing, and 100/300/1000-item benchmarks.
@@ -252,7 +249,7 @@ An initial policy is SVG up to 100 items, SVG or Canvas from 100 to 300 with hid
 
 1. `items` is a controlled prop; the base API does not expose separate add/remove methods.
 2. The imperative API is limited to `spin`, `cancel`, and state inspection.
-3. SVG is the primary renderer; Canvas is the optimized dense renderer.
+3. Canvas is the sole wheel renderer.
 4. Add/remove uses one shared transition configuration instead of a separate animation engine per sector.
 5. Server mode accepts a ready `winnerId` or `resolveWinner({ signal })`; the server response remains authoritative.
 6. For 1000+ items, exact selection is preserved while labels and dividers are simplified automatically.
