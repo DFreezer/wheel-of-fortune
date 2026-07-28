@@ -383,9 +383,10 @@ export function Wheel<T = unknown>({
     ], { duration: 150, easing: 'ease-out' });
   }, [pointerBaseTransform]);
 
-  const notifySectorPass = useCallback((sector: Sector<T>) => {
+  const notifySectorPass = useCallback((sector: Sector<T>, playTickSound = true) => {
     animatePointer();
     latestPropsRef.current.onSectorPass?.(sector.item);
+    if (!playTickSound) return;
     const rateLimit = latestPropsRef.current.sounds?.tickRateLimit ?? 55;
     if (performance.now() - lastTickRef.current >= rateLimit) {
       lastTickRef.current = performance.now();
@@ -409,7 +410,7 @@ export function Wheel<T = unknown>({
       const sector = sectorAtAngle(sectorsRef.current, pointerAngle - idleRotation - rotationRef.current);
       const nextId = sector?.item.id ?? null;
       const previousId = idlePointerSectorIdRef.current;
-      if (previousId !== undefined && sector && nextId !== previousId) notifySectorPass(sector);
+      if (previousId !== undefined && sector && nextId !== previousId) notifySectorPass(sector, false);
       idlePointerSectorIdRef.current = nextId;
       frame = requestAnimationFrame(observe);
     };
