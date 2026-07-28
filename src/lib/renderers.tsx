@@ -3,6 +3,7 @@ import { polar, wedgePath, type Sector } from './geometry';
 import type { SectorTextStyle, ShadowStyle, WheelItem, WheelSectorImage, WheelTheme } from './types';
 
 const MIN_DIVIDER_ANGLE = 0.75;
+const LABEL_RADIUS_SCALE = 0.86;
 
 export interface WheelDrawingProps<T> {
   sectors: readonly Sector<T>[];
@@ -66,12 +67,29 @@ function imageTransform(image: WheelSectorImage): string {
 
 function labelPoint(text: SectorTextStyle, sector: Sector): { x: number; y: number; rotation: number } {
   const mid = sector.start + sector.angle / 2;
-  const point = polar(Math.min(Math.max(text.radius, 0), 1) * 43, mid);
+  const point = polar(labelRadius(text, 50), mid);
   return {
     x: point.x + text.offsetX,
     y: point.y + text.offsetY,
     rotation: text.orientation === 'radial' ? mid : text.orientation === 'tangential' ? mid + 90 : 0,
   };
+}
+
+function labelRadius(text: SectorTextStyle, wheelRadius: number): number {
+  return Math.min(Math.max(text.radius, 0), 1) * wheelRadius * LABEL_RADIUS_SCALE;
+}
+
+/**
+ * A radial label reads along the radius, so its usable width is bounded by
+ * the distance to the centre and rim—not by the sector's tangential arc.
+ * This intentionally makes the fit calculation independent of sector angle.
+ */
+function radialLabelWidth(text: SectorTextStyle, labelRadius: number, wheelRadius: number): number {
+  const inward = Math.max(0, labelRadius);
+  const outward = Math.max(0, wheelRadius - labelRadius);
+  if (text.align === 'start') return outward;
+  if (text.align === 'end') return inward;
+  return 2 * Math.min(inward, outward);
 }
 
 function colorAt<T>(sector: Sector<T>, theme: WheelTheme): string {
@@ -100,9 +118,11 @@ function fitSvgLabel(
   sector: Sector,
 ): { label: string; fontSize: number } | null {
   const fontSize = viewBoxFontSize(text.fontSize);
-  const radius = Math.min(Math.max(text.radius, 0), 1) * 43;
-  const arcWidth = Math.max(0, radius * ((sector.angle * Math.PI) / 180) * 0.76);
-  const maxWidth = text.maxWidth === undefined ? arcWidth : Math.max(0, text.maxWidth);
+  const radius = labelRadius(text, 50);
+  const availableWidth = text.orientation === 'radial'
+    ? radialLabelWidth(text, radius, 50)
+    : Math.max(0, radius * ((sector.angle * Math.PI) / 180) * 0.76);
+  const maxWidth = text.maxWidth === undefined ? availableWidth : Math.max(0, text.maxWidth);
   if (maxWidth < fontSize * 1.4) return null;
   const font = `${text.fontWeight} ${fontSize}px ${text.fontFamily}`;
   const width = measureTextWidth(sector.item.label, font, fontSize);
@@ -358,11 +378,12 @@ export function WheelCanvasRenderer<T>({ sectors, theme, minLabelAngle, highligh
       if (sector.angle < minLabelAngle && text.overflow === 'hide') continue;
       const fontSize = canvasFontSize(text.fontSize, dimension);
       const mid = sector.start + sector.angle / 2;
-      const labelRadius = Math.min(Math.max(text.radius, 0), 1) * radius * 0.86;
-      const arcLength = (sector.angle / 360) * Math.PI * 2 * labelRadius;
-      if (arcLength < 22) continue;
+      const labelPositionRadius = labelRadius(text, radius);
+      const arcLength = (sector.angle / 360) * Math.PI * 2 * labelPositionRadius;
       const maxWidth = text.maxWidth === undefined
-        ? Math.max(0, arcLength * 0.78)
+        ? text.orientation === 'radial'
+          ? radialLabelWidth(text, labelPositionRadius, radius)
+          : Math.max(0, arcLength * 0.78)
         : (text.maxWidth / 100) * dimension;
       ctx.save();
       ctx.beginPath();
@@ -382,8 +403,8 @@ export function WheelCanvasRenderer<T>({ sectors, theme, minLabelAngle, highligh
       ctx.textBaseline = 'middle';
       const radians = (mid * Math.PI) / 180;
       ctx.translate(
-        center + labelRadius * Math.cos(radians) + (text.offsetX / 100) * dimension,
-        center + labelRadius * Math.sin(radians) + (text.offsetY / 100) * dimension,
+        center + labelPositionRadius * Math.cos(radians) + (text.offsetX / 100) * dimension,
+        center + labelPositionRadius * Math.sin(radians) + (text.offsetY / 100) * dimension,
       );
       const rotation = text.orientation === 'radial' ? mid : text.orientation === 'tangential' ? mid + 90 : 0;
       ctx.rotate((rotation * Math.PI) / 180);
