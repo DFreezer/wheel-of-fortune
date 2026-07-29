@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type Re
 import { interpolateSectors, type Sector } from './geometry';
 import { easingProgress } from './easing';
 import { formatProbability } from './probability';
-import { wrapCanvasText } from './textLayout';
+import { wrapCanvasTextWithEllipsis } from './textLayout';
 import type { SectorTextStyle, ShadowStyle, WheelCanvasDrawEvent, WheelHighlightStyle, WheelItem, WheelSectorImage, WheelTheme } from './types';
 
 const MIN_DIVIDER_ANGLE = 0.75;
@@ -371,31 +371,22 @@ function measureCachedText(ctx: CanvasRenderingContext2D, cache: CanvasTextCache
   return cacheValue(cache.measurements, key, ctx.measureText(value).width);
 }
 
-function ellipsizeCanvasLabel(ctx: CanvasRenderingContext2D, cache: CanvasTextCache, value: string, font: string, maxWidth: number): string {
-  const suffix = '…';
-  let end = value.length;
-  while (end > 0 && measureCachedText(ctx, cache, font, `${value.slice(0, end)}${suffix}`) > maxWidth) end -= 1;
-  return end > 0 ? `${value.slice(0, end)}${suffix}` : '';
-}
-
 const CANVAS_TEXT_LINE_HEIGHT = 1.15;
 
-function wrapFittedCanvasLabel(
+function ellipsizedWrappedCanvasLabel(
   ctx: CanvasRenderingContext2D,
   cache: CanvasTextCache,
   label: string,
   maxWidth: number,
-  maxHeight: number,
   maxLines: number,
   fontSize: number,
   fontWeight: SectorTextStyle['fontWeight'],
   fontFamily: string,
 ): FittedCanvasLabel | null {
   const font = `${fontWeight} ${fontSize}px ${fontFamily}`;
-  const lineHeight = fontSize * CANVAS_TEXT_LINE_HEIGHT;
-  const lines = wrapCanvasText(label, maxWidth, maxLines, (value) => measureCachedText(ctx, cache, font, value));
-  if (!lines || lines.length * lineHeight > maxHeight) return null;
-  return { lines, font, fontSize, lineHeight };
+  const lines = wrapCanvasTextWithEllipsis(label, maxWidth, maxLines, (value) => measureCachedText(ctx, cache, font, value));
+  if (!lines) return null;
+  return { lines, font, fontSize, lineHeight: fontSize * CANVAS_TEXT_LINE_HEIGHT };
 }
 
 function fitCachedCanvasLabel(
@@ -419,28 +410,28 @@ function fitCachedCanvasLabel(
   if (maxWidth >= 12) {
     if (overflow === 'shrink-wrap') {
       const minimum = Math.min(fontSize, Math.max(1, minFontSize));
-      const atMinimum = wrapFittedCanvasLabel(ctx, cache, label, maxWidth, maxHeight, maxLines, minimum, fontWeight, fontFamily);
-      if (atMinimum) {
-        let low = minimum;
-        let high = fontSize;
-        let best = atMinimum;
-        for (let attempt = 0; attempt < 9; attempt += 1) {
-          const candidate = (low + high) / 2;
-          const fittedCandidate = wrapFittedCanvasLabel(ctx, cache, label, maxWidth, maxHeight, maxLines, candidate, fontWeight, fontFamily);
-          if (fittedCandidate) {
-            best = fittedCandidate;
-            low = candidate;
-          } else {
-            high = candidate;
+      const wrapped = ellipsizedWrappedCanvasLabel(ctx, cache, label, maxWidth, maxLines, fontSize, fontWeight, fontFamily);
+      if (wrapped) {
+        const requiredHeight = wrapped.lines.length * wrapped.lineHeight;
+        if (requiredHeight <= maxHeight) {
+          fitted = wrapped;
+        } else {
+          const heightLimitedSize = Math.max(minimum, Math.min(fontSize, maxHeight / (wrapped.lines.length * CANVAS_TEXT_LINE_HEIGHT)));
+          if (heightLimitedSize * wrapped.lines.length * CANVAS_TEXT_LINE_HEIGHT <= maxHeight) {
+            fitted = {
+              ...wrapped,
+              font: `${fontWeight} ${heightLimitedSize}px ${fontFamily}`,
+              fontSize: heightLimitedSize,
+              lineHeight: heightLimitedSize * CANVAS_TEXT_LINE_HEIGHT,
+            };
           }
         }
-        fitted = best;
       }
     } else {
       const width = measureCachedText(ctx, cache, font, label);
       if (width <= maxWidth) fitted = { lines: [label], font, fontSize, lineHeight: fontSize * CANVAS_TEXT_LINE_HEIGHT };
       else if (overflow === 'ellipsis') {
-        const shortened = ellipsizeCanvasLabel(ctx, cache, label, font, maxWidth);
+        const shortened = wrapCanvasTextWithEllipsis(label, maxWidth, 1, (value) => measureCachedText(ctx, cache, font, value))?.[0] ?? '';
         if (shortened) fitted = { lines: [shortened], font, fontSize, lineHeight: fontSize * CANVAS_TEXT_LINE_HEIGHT };
       } else if (overflow === 'shrink') {
         const shrunkSize = Math.max(fontSize * 0.55, fontSize * (maxWidth / width));

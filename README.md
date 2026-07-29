@@ -113,8 +113,10 @@ function PrizeWheel() {
 ```
 
 For labels that can be longer than their sectors, use `overflow: 'shrink-wrap'`.
-It wraps at word boundaries, then reduces text only as far as `minFontSize` and
-never exceeds `maxLines` (both default to 55% of `fontSize` and two lines).
+It wraps at word boundaries; an unbreakable word or text beyond `maxLines` is
+truncated with an ellipsis. It reduces text only when the resulting lines do
+not fit vertically, only as far as `minFontSize` (both defaults are 55% of
+`fontSize` and two lines).
 Set `innerRadius` (0–1) to reserve space from the wheel centre, such as for a
 large centre element; text is fitted and clipped outside that inner boundary.
 
