@@ -284,6 +284,8 @@ export interface WheelProps<T = unknown> {
   /** Gentle wobble/pulse applied while idle. Disabled by default. */
   idleAnimation?: boolean | Partial<IdleAnimationConfig>;
   minLabelAngle?: number;
+  /** Draw each sector's normalized chance below its label. Defaults to false. */
+  showProbability?: boolean;
   /** Optional visual emphasis drawn by a dedicated Canvas layer. */
   highlightedItemId?: string;
   /** Visual treatment for `highlightedItemId`. */

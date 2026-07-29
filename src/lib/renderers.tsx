@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { interpolateSectors, type Sector } from './geometry';
 import { easingProgress } from './easing';
+import { formatProbability } from './probability';
 import type { SectorTextStyle, ShadowStyle, WheelCanvasDrawEvent, WheelHighlightStyle, WheelItem, WheelSectorImage, WheelTheme } from './types';
 
 const MIN_DIVIDER_ANGLE = 0.75;
@@ -17,6 +18,7 @@ export interface WheelDrawingProps<T> {
   sectors: readonly Sector<T>[];
   theme: WheelTheme;
   minLabelAngle: number;
+  showProbability?: boolean;
   highlightedItemId?: string;
   highlightStyle?: Partial<WheelHighlightStyle>;
   onCanvasDraw?: (event: WheelCanvasDrawEvent) => void;
@@ -194,6 +196,7 @@ interface BaseBitmapCache<T> {
   prepared: readonly PreparedCanvasSector<T>[];
   theme: WheelTheme;
   minLabelAngle: number;
+  showProbability: boolean;
   decorations: boolean;
   detail: CanvasRenderDetail;
   imageVersion: number;
@@ -401,6 +404,7 @@ function drawLabels<T>(
   sectors: readonly PreparedCanvasSector<T>[],
   dimension: number,
   minLabelAngle: number,
+  showProbability: boolean,
   cache: CanvasTextCache,
 ) {
   const center = dimension / 2;
@@ -409,6 +413,11 @@ function drawLabels<T>(
     const { text } = sector;
     const fontSize = canvasFontSize(text.fontSize, dimension);
     const font = `${text.fontWeight} ${fontSize}px ${text.fontFamily}`;
+    const probability = showProbability
+      ? formatProbability(sector.sector.angle / 360)
+      : undefined;
+    const probabilityFontSize = Math.max(1, fontSize * 0.72);
+    const probabilityFont = `${text.fontWeight} ${probabilityFontSize}px ${text.fontFamily}`;
     const labelPositionRadius = labelRadius(text, center);
     const arcLength = (sector.sector.angle / 360) * Math.PI * 2 * labelPositionRadius;
     const maxWidth = text.maxWidth === undefined
@@ -426,7 +435,7 @@ function drawLabels<T>(
       font,
       text.overflow,
     ].join('\u0001');
-    const fitted = fitCachedCanvasLabel(
+    const fittedLabel = fitCachedCanvasLabel(
       ctx,
       cache,
       labelKey,
@@ -438,11 +447,22 @@ function drawLabels<T>(
       text.fontWeight,
       text.fontFamily,
     );
-    if (!fitted) continue;
+    const fittedProbability = probability && fitCachedCanvasLabel(
+      ctx,
+      cache,
+      `${labelKey}\u0001probability\u0001${probability}\u0001${probabilityFont}`,
+      probability,
+      maxWidth,
+      text.overflow,
+      probabilityFont,
+      probabilityFontSize,
+      text.fontWeight,
+      text.fontFamily,
+    );
+    if (!fittedLabel && !fittedProbability) continue;
     ctx.save();
     drawSectorPath(ctx, sector, center, center);
     ctx.clip();
-    ctx.font = fitted.font;
     ctx.fillStyle = text.color;
     ctx.textAlign = textAnchor(text.align);
     ctx.textBaseline = 'middle';
@@ -453,12 +473,28 @@ function drawLabels<T>(
     const rotation = text.orientation === 'radial' ? sector.midAngle : text.orientation === 'tangential' ? sector.midAngle + 90 : 0;
     ctx.rotate((rotation * Math.PI) / 180);
     applyCanvasShadow(ctx, text.shadow, dimension);
-    ctx.fillText(fitted.label, 0, 0, maxWidth);
-    if (text.strokeWidth > 0) {
-      ctx.strokeStyle = text.strokeColor;
-      ctx.lineWidth = (text.strokeWidth / 100) * dimension;
-      ctx.lineJoin = 'round';
-      ctx.strokeText(fitted.label, 0, 0, maxWidth);
+    const labelY = fittedProbability ? -probabilityFontSize * 0.48 : 0;
+    if (fittedLabel) {
+      ctx.font = fittedLabel.font;
+      ctx.fillText(fittedLabel.label, 0, labelY, maxWidth);
+      if (text.strokeWidth > 0) {
+        ctx.strokeStyle = text.strokeColor;
+        ctx.lineWidth = (text.strokeWidth / 100) * dimension;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(fittedLabel.label, 0, labelY, maxWidth);
+      }
+    }
+    if (fittedProbability) {
+      ctx.globalAlpha = 0.86;
+      ctx.font = fittedProbability.font;
+      const probabilityY = fittedLabel ? Math.max(fontSize, probabilityFontSize) * 0.54 : 0;
+      ctx.fillText(fittedProbability.label, 0, probabilityY, maxWidth);
+      if (text.strokeWidth > 0) {
+        ctx.strokeStyle = text.strokeColor;
+        ctx.lineWidth = (text.strokeWidth / 100) * dimension;
+        ctx.lineJoin = 'round';
+        ctx.strokeText(fittedProbability.label, 0, probabilityY, maxWidth);
+      }
     }
     ctx.restore();
   }
@@ -470,6 +506,7 @@ function drawCanvasFrame<T>(
   dimension: number,
   theme: WheelTheme,
   minLabelAngle: number,
+  showProbability: boolean,
   decorations: boolean,
   detail: CanvasRenderDetail,
   images: ReadonlyMap<string, HTMLImageElement>,
@@ -480,9 +517,9 @@ function drawCanvasFrame<T>(
   drawSectorFills(ctx, sectors, dimension);
   if (detail === 'full') {
     drawSectorImages(ctx, sectors, dimension, images);
-    drawLabels(ctx, sectors, dimension, minLabelAngle, textCache);
+    drawLabels(ctx, sectors, dimension, minLabelAngle, showProbability, textCache);
   } else if (detail === 'dense') {
-    drawLabels(ctx, sectors, dimension, minLabelAngle, textCache);
+    drawLabels(ctx, sectors, dimension, minLabelAngle, showProbability, textCache);
   }
   if (decorations) {
     const simplified = detail === 'transition';
@@ -538,6 +575,7 @@ function shouldRebuildBase<T>(
   prepared: readonly PreparedCanvasSector<T>[],
   theme: WheelTheme,
   minLabelAngle: number,
+  showProbability: boolean,
   decorations: boolean,
   detail: CanvasRenderDetail,
   imageVersion: number,
@@ -548,6 +586,7 @@ function shouldRebuildBase<T>(
     || cache.prepared !== prepared
     || cache.theme !== theme
     || cache.minLabelAngle !== minLabelAngle
+    || cache.showProbability !== showProbability
     || cache.decorations !== decorations
     || cache.detail !== detail
     || cache.imageVersion !== imageVersion
@@ -560,6 +599,7 @@ export interface WheelCanvasTransitionProps<T> {
   to: readonly Sector<T>[];
   theme: WheelTheme;
   minLabelAngle: number;
+  showProbability?: boolean;
   duration: number;
   easing: string;
   /** `transition` skips labels, images and shadows for the 51–150 sector LOD. */
@@ -580,6 +620,7 @@ function WheelCanvasTransitionRendererInner<T>({
   to,
   theme,
   minLabelAngle,
+  showProbability = false,
   duration,
   easing,
   detail,
@@ -608,7 +649,7 @@ function WheelCanvasTransitionRendererInner<T>({
       const surface = prepareCanvas(canvas, dimension, metrics.dpr);
       if (!surface) return;
       const sectors = prepareCanvasSectors(interpolateSectors(from, to, easingProgress(progress, easing)), theme);
-      drawCanvasFrame(surface.ctx, sectors, dimension, theme, minLabelAngle, decorations, detail, images, textCacheRef.current);
+      drawCanvasFrame(surface.ctx, sectors, dimension, theme, minLabelAngle, showProbability, decorations, detail, images, textCacheRef.current);
       onCanvasDraw?.({ layer: 'transition', detail });
     };
 
@@ -625,7 +666,7 @@ function WheelCanvasTransitionRendererInner<T>({
     draw(0);
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
-  }, [decorations, detail, duration, easing, from, imageVersion, images, metrics, minLabelAngle, onCanvasDraw, theme, to]);
+  }, [decorations, detail, duration, easing, from, imageVersion, images, metrics, minLabelAngle, onCanvasDraw, showProbability, theme, to]);
 
   return <canvas ref={ref} className={['wheel__canvas', className].filter(Boolean).join(' ')} style={{ backgroundColor: theme.background, borderRadius: '50%', ...style }} aria-hidden="true" />;
 }
@@ -636,6 +677,7 @@ function WheelCanvasRendererInner<T>({
   sectors,
   theme,
   minLabelAngle,
+  showProbability = false,
   highlightedItemId,
   highlightStyle,
   onCanvasDraw,
@@ -660,16 +702,17 @@ function WheelCanvasRendererInner<T>({
     if (!surface) return;
 
     let base = baseBitmapRef.current;
-    if (shouldRebuildBase(base, prepared, theme, minLabelAngle, decorations, detail, imageVersion, dimension, metrics.dpr)) {
+    if (shouldRebuildBase(base, prepared, theme, minLabelAngle, showProbability, decorations, detail, imageVersion, dimension, metrics.dpr)) {
       const bitmapCanvas = base?.canvas ?? document.createElement('canvas');
       const bitmapSurface = prepareCanvas(bitmapCanvas, dimension, metrics.dpr);
       if (!bitmapSurface) return;
-      drawCanvasFrame(bitmapSurface.ctx, prepared, dimension, theme, minLabelAngle, decorations, detail, images, textCacheRef.current);
+      drawCanvasFrame(bitmapSurface.ctx, prepared, dimension, theme, minLabelAngle, showProbability, decorations, detail, images, textCacheRef.current);
       base = {
         canvas: bitmapCanvas,
         prepared,
         theme,
         minLabelAngle,
+        showProbability,
         decorations,
         detail,
         imageVersion,
@@ -683,7 +726,7 @@ function WheelCanvasRendererInner<T>({
     surface.ctx.clearRect(0, 0, dimension, dimension);
     surface.ctx.drawImage(base.canvas, 0, 0, dimension, dimension);
     onCanvasDraw?.({ layer: 'base', detail });
-  }, [decorations, detail, imageVersion, images, metrics, minLabelAngle, onCanvasDraw, prepared, theme]);
+  }, [decorations, detail, imageVersion, images, metrics, minLabelAngle, onCanvasDraw, prepared, showProbability, theme]);
 
   return <>
     <canvas ref={ref} className={['wheel__canvas', className].filter(Boolean).join(' ')} style={{ backgroundColor: theme.background, borderRadius: '50%', ...style }} aria-hidden="true" />

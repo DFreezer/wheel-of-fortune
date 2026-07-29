@@ -122,7 +122,7 @@ const translations = {
     spin: { title: 'Spin', spinning: 'Wheel is spinning…', random: 'Spin randomly', server: 'Spin with server result', cancel: 'Cancel spin / request', serverWinner: 'Server winner', landing: 'Landing position', center: 'Sector center', randomInside: 'Random inside', preset: 'Spin preset', rotations: 'rotations', duration: 'Duration', seconds: 's', async: 'Resolve winner through async resolver (1.2s demo)' },
     appearance: { title: 'Appearance, frame and center', size: 'Size inside container', frame: 'Frame', center: 'Center', classic: 'Classic SVG', neon: 'Animated neon SVG', cosmic: 'Cosmic orbits SVG', realistic: 'Realistic space', custom: 'Custom media', none: 'No frame', cap: 'SPIN cap', gem: 'Gem', miniSolar: 'Mini solar system', realisticSolar: 'Realistic solar system', noCenter: 'No center', frameMedia: 'Frame: URL, GIF or WebM', centerMedia: 'Center: URL, GIF or WebM', centerSize: 'Center size', pointerPosition: 'Pointer position', top: 'Top', right: 'Right', pointer: 'Pointer', defaultPointer: 'Default', cosmicPointer: 'Spacecraft', realisticPointer: 'Realistic spacecraft' },
     theme: { title: 'Global theme and text', reset: 'Reset', colors: 'Colors, borders and dividers', wheelBackground: 'Wheel background', text: 'Text', color: 'Color', border: 'Border', dividers: 'Dividers', dividerShadow: 'Divider shadow', blur: 'Blur', offsetX: 'Offset X', offsetY: 'Offset Y', typography: 'Typography and positioning', font: 'Font', orientation: 'Orientation', tangential: 'Tangential', radial: 'Radial', horizontal: 'Horizontal', align: 'Alignment', middle: 'Center', start: 'Start', end: 'End', overflow: 'Overflow', hide: 'Hide', ellipsis: 'Ellipsis', shrink: 'Shrink', sizeShort: 'Size', weightShort: 'Weight', radius: 'Radius', textEffects: 'Text stroke and shadow', textStroke: 'Text stroke', shadow: 'Text shadow', thickness: 'Thickness', shadowX: 'Shadow X', shadowY: 'Shadow Y' },
-    sectors: { addRemove: 'Add and remove', transition: 'List change animation', collapse: 'Collapse / expand sectors', noAnimation: 'No animation', transitionHint: 'Collapse redraws up to 150 sectors at an appropriate level of detail and crossfades larger wheels.', duration: 'Duration', title: 'Sectors', add: '+ Add', restore: 'Restore demo', loadTest: 'Load test set', hidden: (count: number) => `The editor is hidden for ${count} sectors so the playground does not distort wheel performance.`, empty: 'Add at least one sector.', textTitle: 'Text', resetOverride: 'Reset override', imageSection: 'Sector image', added: 'Added', notSet: 'Not set', imageOverColor: 'Image over color', opacity: 'Opacity', scale: 'Scale', rotation: 'Rotation', imageOffsetX: 'Offset X', imageOffsetY: 'Offset Y', fit: 'Fit', stretch: 'Stretch', removeImage: 'Remove image', sectorText: 'Sector text', color: 'Color' },
+    sectors: { addRemove: 'Add and remove', transition: 'List change animation', collapse: 'Collapse / expand sectors', noAnimation: 'No animation', transitionHint: 'Collapse redraws up to 150 sectors at an appropriate level of detail and crossfades larger wheels.', duration: 'Duration', title: 'Sectors', showChances: 'Show chances for every sector', add: '+ Add', restore: 'Restore demo', loadTest: 'Load test set', hidden: (count: number) => `The editor is hidden for ${count} sectors so the playground does not distort wheel performance.`, empty: 'Add at least one sector.', textTitle: 'Text', resetOverride: 'Reset override', imageSection: 'Sector image', added: 'Added', notSet: 'Not set', imageOverColor: 'Image over color', opacity: 'Opacity', scale: 'Scale', rotation: 'Rotation', imageOffsetX: 'Offset X', imageOffsetY: 'Offset Y', fit: 'Fit', stretch: 'Stretch', removeImage: 'Remove image', sectorText: 'Sector text', color: 'Color' },
     effects: { idle: 'Idle animation', idleAria: 'Enable idle animation', idleLead: 'A subtle motion keeps the wheel alive between spins.', period: 'Period', rotation: 'Rotation', pulse: 'Pulse', sound: 'Sound', start: 'Start', sectorPass: 'Sector pass', win: 'Win' },
     errors: { initial: 'Choose a mode and spin the wheel', selectedServer: (label: string) => `Sector “${label}” selected for server-side mode`, denseLoaded: (count: number) => `Loaded ${count} sectors for Canvas performance testing`, winner: (label: string, mode: string) => `${label} · ${mode === 'server' ? 'server-side' : 'client-side'}` },
   },
@@ -178,7 +178,7 @@ const translations = {
     spin: { title: 'Прокрутка', spinning: 'Колесо обертається…', random: 'Крутити випадково', server: 'Крутити з результатом сервера', cancel: 'Скасувати прокрутку / запит', serverWinner: 'Переможець від сервера', landing: 'Позиція зупинки', center: 'Центр сектора', randomInside: 'Випадково всередині', preset: 'Пресет обертання', rotations: 'обертів', duration: 'Тривалість', seconds: 'с', async: 'Отримувати winner через async resolver (демо 1,2 с)' },
     appearance: { title: 'Вигляд, рамка та центр', size: 'Розмір у контейнері', frame: 'Рамка', center: 'Центр', classic: 'Класична SVG', neon: 'Анімований неон SVG', cosmic: 'Космічні орбіти SVG', realistic: 'Реалістичний космос', custom: 'Власне медіа', none: 'Без рамки', cap: 'SPIN cap', gem: 'Кристал', miniSolar: 'Міні-сонячна система', realisticSolar: 'Реалістична сонячна система', noCenter: 'Без центра', frameMedia: 'Рамка: URL, GIF або WebM', centerMedia: 'Центр: URL, GIF або WebM', centerSize: 'Розмір центра', pointerPosition: 'Положення вказівника', top: 'Зверху', right: 'Праворуч', pointer: 'Вказівник', defaultPointer: 'Стандартний', cosmicPointer: 'Космічний апарат', realisticPointer: 'Реалістичний апарат' },
     theme: { title: 'Загальна тема та текст', reset: 'Скинути', colors: 'Кольори, межі та роздільники', wheelBackground: 'Фон колеса', text: 'Текст', color: 'Колір', border: 'Обводка', dividers: 'Роздільники', dividerShadow: 'Тінь роздільників', blur: 'Розмиття', offsetX: 'Зсув X', offsetY: 'Зсув Y', typography: 'Типографіка та позиціонування', font: 'Шрифт', orientation: 'Орієнтація', tangential: 'По дотичній', radial: 'По радіусу', horizontal: 'Горизонтально', align: 'Вирівнювання', middle: 'По центру', start: 'На початку', end: 'У кінці', overflow: 'Переповнення', hide: 'Приховати', ellipsis: 'Многоточчя', shrink: 'Зменшити', sizeShort: 'Розмір', weightShort: 'Товщина', radius: 'Радіус', textEffects: 'Обводка й тінь тексту', textStroke: 'Обводка тексту', shadow: 'Тінь тексту', thickness: 'Товщина', shadowX: 'Тінь X', shadowY: 'Тінь Y' },
-    sectors: { addRemove: 'Додавання та видалення', transition: 'Анімація зміни списку', collapse: 'Схлопування / розкриття секторів', noAnimation: 'Без анімації', transitionHint: 'Схлопування перемальовує до 150 секторів з відповідним рівнем деталізації, а більші колеса плавно змінює через crossfade.', duration: 'Тривалість', title: 'Сектори', add: '+ Додати', restore: 'Відновити демо', loadTest: 'Навантажувальний набір', hidden: (count: number) => `Редактор приховано для ${count} секторів, щоб playground не спотворював продуктивність колеса.`, empty: 'Додайте хоча б один сектор.', textTitle: 'Текст', resetOverride: 'Скинути override', imageSection: 'Зображення сектора', added: 'Додано', notSet: 'Не задано', imageOverColor: 'Зображення поверх кольору', opacity: 'Непрозорість', scale: 'Масштаб', rotation: 'Поворот', imageOffsetX: 'Зсув X', imageOffsetY: 'Зсув Y', fit: 'Заповнення', stretch: 'Розтягнути', removeImage: 'Прибрати зображення', sectorText: 'Сектор текст', color: 'Колір' },
+    sectors: { addRemove: 'Додавання та видалення', transition: 'Анімація зміни списку', collapse: 'Схлопування / розкриття секторів', noAnimation: 'Без анімації', transitionHint: 'Схлопування перемальовує до 150 секторів з відповідним рівнем деталізації, а більші колеса плавно змінює через crossfade.', duration: 'Тривалість', title: 'Сектори', showChances: 'Показувати шанси для всіх секторів', add: '+ Додати', restore: 'Відновити демо', loadTest: 'Навантажувальний набір', hidden: (count: number) => `Редактор приховано для ${count} секторів, щоб playground не спотворював продуктивність колеса.`, empty: 'Додайте хоча б один сектор.', textTitle: 'Текст', resetOverride: 'Скинути override', imageSection: 'Зображення сектора', added: 'Додано', notSet: 'Не задано', imageOverColor: 'Зображення поверх кольору', opacity: 'Непрозорість', scale: 'Масштаб', rotation: 'Поворот', imageOffsetX: 'Зсув X', imageOffsetY: 'Зсув Y', fit: 'Заповнення', stretch: 'Розтягнути', removeImage: 'Прибрати зображення', sectorText: 'Сектор текст', color: 'Колір' },
     effects: { idle: 'Idle-анімація', idleAria: 'Увімкнути idle-анімацію', idleLead: 'Легкий рух оживляє колесо між прокрутками.', period: 'Період', rotation: 'Поворот', pulse: 'Пульсація', sound: 'Звук', start: 'Старт', sectorPass: 'Проходження сектора', win: 'Виграш' },
     errors: { initial: 'Оберіть режим і запустіть колесо', selectedServer: (label: string) => `Сектор «${label}» вибрано для server-side режиму`, denseLoaded: (count: number) => `Завантажено ${count} секторів для перевірки Canvas performance`, winner: (label: string, mode: string) => `${label} · ${mode === 'server' ? 'server-side' : 'client-side'}` },
   },
@@ -827,6 +827,7 @@ interface PlaygroundWheelStageProps {
   sounds?: WheelSoundConfig;
   spinAnimation: Partial<SpinAnimationConfig>;
   idleAnimation: Partial<IdleAnimationConfig>;
+  showProbability: boolean;
   winnerId: string;
   landing: 'center' | 'random';
   asyncServer: boolean;
@@ -849,6 +850,7 @@ const PlaygroundWheelStage = memo(forwardRef<PlaygroundWheelStageHandle, Playgro
   sounds,
   spinAnimation,
   idleAnimation,
+  showProbability,
   winnerId,
   landing,
   asyncServer,
@@ -930,6 +932,7 @@ const PlaygroundWheelStage = memo(forwardRef<PlaygroundWheelStageHandle, Playgro
           sounds={sounds}
           spinAnimation={spinAnimation}
           idleAnimation={idleAnimation}
+          showProbability={showProbability}
           minLabelAngle={8}
           highlightedItemId={hoveredItemId}
           onSectorHover={handleHover}
@@ -949,6 +952,7 @@ export function Playground() {
   const copy = translations[locale];
   const [activePanel, setActivePanel] = useState<SettingsPanel>('spin');
   const [items, setItems] = useState<WheelItem[]>(initialItems);
+  const [showProbability, setShowProbability] = useState(true);
   const [winnerId, setWinnerId] = useState(initialItems[0].id);
   const [landing, setLanding] = useState<'center' | 'random'>('center');
   const [wheelSize, setWheelSize] = useState(92);
@@ -1280,6 +1284,7 @@ function PrizeWheel() {
           sounds={sounds}
           spinAnimation={spinAnimation}
           idleAnimation={idleAnimation}
+          showProbability={showProbability}
           winnerId={winnerId}
           landing={landing}
           asyncServer={asyncServer}
@@ -1471,6 +1476,7 @@ function PrizeWheel() {
 
           <section className="controlSection">
             <div className="sectionTitle"><h2>{copy.sectors.title}</h2>{items.length <= 40 ? <button className="textButton" onClick={addItem}>{copy.sectors.add}</button> : <button className="textButton" onClick={resetDemo}>{copy.sectors.restore}</button>}</div>
+            <label className="toggleLine"><input type="checkbox" checked={showProbability} onChange={(event) => setShowProbability(event.target.checked)} /> {copy.sectors.showChances}</label>
             <div className="denseActions">
               <span>{copy.sectors.loadTest}</span>
               <button onClick={() => loadDenseWheel(100)}>100</button>

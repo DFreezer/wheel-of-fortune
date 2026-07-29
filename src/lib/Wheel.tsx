@@ -216,6 +216,7 @@ export function Wheel<T = unknown>({
   spinAnimation,
   idleAnimation,
   minLabelAngle = 7,
+  showProbability = false,
   highlightedItemId,
   highlightStyle,
   onCanvasDraw,
@@ -309,6 +310,7 @@ export function Wheel<T = unknown>({
     spinAnimation,
     idleAnimation,
     minLabelAngle,
+    showProbability,
     highlightedItemId,
     highlightStyle,
     onCanvasDraw,
@@ -793,6 +795,7 @@ export function Wheel<T = unknown>({
       sectors: drawingSectors,
       theme,
       minLabelAngle,
+      showProbability,
       highlightedItemId,
       highlightStyle,
       onCanvasDraw,
@@ -844,6 +847,7 @@ export function Wheel<T = unknown>({
                   to={createSectors(itemsTransitionState.to)}
                   theme={theme}
                   minLabelAngle={minLabelAngle}
+                  showProbability={showProbability}
                   duration={itemsTransitionState.config.duration}
                   easing={itemsTransitionState.config.easing}
                   detail={canvasCollapsePolicy === 'full' ? 'full' : 'transition'}

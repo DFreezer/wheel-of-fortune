@@ -47,7 +47,7 @@ npm test
 
 ## Implemented features
 
-- sectors with arbitrary weights, colors, transparent image layers above the color, and per-sector text styles;
+- sectors with arbitrary weights, colors, transparent image layers above the color, per-sector text styles, and optional normalized chance labels;
 - labels clipped to the sector wedge; long text uses an ellipsis by default, with `hide` and `shrink` alternatives;
 - configurable wheel borders, text strokes and shadows, and divider shadows;
 - client-side weighted selection using `crypto.getRandomValues`, server-side selection through `winnerId`, and an asynchronous `resolveWinner` with `AbortSignal`;
@@ -89,6 +89,7 @@ function PrizeWheel() {
         controller={wheel}
         items={items}
         size="100%"
+        showProbability
         itemsTransition={{ mode: 'collapse', duration: 360, easing: 'cubic-bezier(.22, 1, .36, 1)' }}
         spinAnimation={{
           duration: 4200,
