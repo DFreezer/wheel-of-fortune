@@ -2,7 +2,7 @@ import type { CSSProperties, ReactNode } from 'react';
 
 export type TextOrientation = 'radial' | 'tangential' | 'horizontal';
 export type TextAlign = 'start' | 'middle' | 'end';
-export type TextOverflow = 'hide' | 'ellipsis' | 'shrink';
+export type TextOverflow = 'hide' | 'ellipsis' | 'shrink' | 'shrink-wrap';
 /** Edge of the wheel on which the winning pointer is rendered. */
 export type WheelPointerPosition = 'top' | 'right';
 
@@ -20,12 +20,25 @@ export interface SectorTextStyle {
   fontWeight: number | string;
   /** Position from the wheel centre: 0 is the centre, 1 is its outer edge. */
   radius: number;
+  /**
+   * Inner boundary for sector text: 0 is the wheel centre, 1 is its outer
+   * edge. Text is clipped before this radius. Default: 0.
+   */
+  innerRadius?: number;
   offsetX: number;
   offsetY: number;
   orientation: TextOrientation;
   align: TextAlign;
   maxWidth?: number;
   overflow: TextOverflow;
+  /**
+   * Smallest text size used by the `shrink-wrap` overflow mode. It accepts
+   * the same percentage or pixel values as `fontSize`. Defaults to 55% of
+   * `fontSize`.
+   */
+  minFontSize?: number | string;
+  /** Maximum number of lines used by the `shrink-wrap` overflow mode. Default: 2. */
+  maxLines?: number;
   /** Outline drawn around glyphs. Width uses the wheel's 0–100 viewBox units. */
   strokeColor: string;
   strokeWidth: number;

@@ -78,7 +78,7 @@ function PrizeWheel() {
     {
       id: 'bonus', label: 'A super-long bonus for a new customer', weight: 70, color: '#7c3aed',
       image: { src: '/sparkles.png', opacity: 0.55, fit: 'cover' },
-      text: { overflow: 'ellipsis', strokeColor: '#312e81', strokeWidth: 0.25 },
+      text: { overflow: 'shrink-wrap', minFontSize: 1.8, maxLines: 2, innerRadius: 0.28, strokeColor: '#312e81', strokeWidth: 0.25 },
     },
     { id: 'gift', label: 'Gift', weight: 30, color: '#db2777' },
   ]);
@@ -111,6 +111,12 @@ function PrizeWheel() {
   );
 }
 ```
+
+For labels that can be longer than their sectors, use `overflow: 'shrink-wrap'`.
+It wraps at word boundaries, then reduces text only as far as `minFontSize` and
+never exceeds `maxLines` (both default to 55% of `fontSize` and two lines).
+Set `innerRadius` (0–1) to reserve space from the wheel centre, such as for a
+large centre element; text is fitted and clipped outside that inner boundary.
 
 ## Asynchronous server result
 

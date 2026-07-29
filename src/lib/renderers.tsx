@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type Re
 import { interpolateSectors, type Sector } from './geometry';
 import { easingProgress } from './easing';
 import { formatProbability } from './probability';
+import { wrapCanvasText } from './textLayout';
 import type { SectorTextStyle, ShadowStyle, WheelCanvasDrawEvent, WheelHighlightStyle, WheelItem, WheelSectorImage, WheelTheme } from './types';
 
 const MIN_DIVIDER_ANGLE = 0.75;
@@ -61,13 +62,18 @@ function labelRadius(text: SectorTextStyle, wheelRadius: number): number {
   return Math.min(Math.max(text.radius, 0), 1) * wheelRadius * LABEL_RADIUS_SCALE;
 }
 
+function labelInnerRadius(text: SectorTextStyle, wheelRadius: number): number {
+  const value = text.innerRadius ?? 0;
+  return Math.min(Math.max(value, 0), 1) * wheelRadius * LABEL_RADIUS_SCALE;
+}
+
 /**
  * A radial label reads along the radius, so its usable width is bounded by
  * the distance to the centre and rim—not by the sector's tangential arc.
  * This intentionally makes the fit calculation independent of sector angle.
  */
-function radialLabelWidth(text: SectorTextStyle, labelRadius: number, wheelRadius: number): number {
-  const inward = Math.max(0, labelRadius);
+function radialLabelWidth(text: SectorTextStyle, labelRadius: number, innerRadius: number, wheelRadius: number): number {
+  const inward = Math.max(0, labelRadius - innerRadius);
   const outward = Math.max(0, wheelRadius - labelRadius);
   if (text.align === 'start') return outward;
   if (text.align === 'end') return inward;
@@ -79,10 +85,11 @@ function colorAt<T>(sector: Sector<T>, theme: WheelTheme): string {
 }
 
 function canvasFontSize(value: SectorTextStyle['fontSize'], size: number): number {
-  if (typeof value === 'number') return Math.max(1, (value / 100) * size);
-  const parsed = Number.parseFloat(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(1, (value / 100) * size);
+  const rawValue = String(value);
+  const parsed = Number.parseFloat(rawValue);
   if (!Number.isFinite(parsed)) return Math.max(1, (3.4 / 100) * size);
-  return value.trim().endsWith('px') ? Math.max(1, parsed) : Math.max(1, (parsed / 100) * size);
+  return rawValue.trim().endsWith('px') ? Math.max(1, parsed) : Math.max(1, (parsed / 100) * size);
 }
 
 const sectorImageCache = new Map<string, HTMLImageElement>();
@@ -181,9 +188,10 @@ interface PreparedCanvasSector<T> {
 }
 
 interface FittedCanvasLabel {
-  label: string;
+  lines: readonly string[];
   font: string;
   fontSize: number;
+  lineHeight: number;
 }
 
 interface CanvasTextCache {
@@ -370,30 +378,74 @@ function ellipsizeCanvasLabel(ctx: CanvasRenderingContext2D, cache: CanvasTextCa
   return end > 0 ? `${value.slice(0, end)}${suffix}` : '';
 }
 
+const CANVAS_TEXT_LINE_HEIGHT = 1.15;
+
+function wrapFittedCanvasLabel(
+  ctx: CanvasRenderingContext2D,
+  cache: CanvasTextCache,
+  label: string,
+  maxWidth: number,
+  maxHeight: number,
+  maxLines: number,
+  fontSize: number,
+  fontWeight: SectorTextStyle['fontWeight'],
+  fontFamily: string,
+): FittedCanvasLabel | null {
+  const font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  const lineHeight = fontSize * CANVAS_TEXT_LINE_HEIGHT;
+  const lines = wrapCanvasText(label, maxWidth, maxLines, (value) => measureCachedText(ctx, cache, font, value));
+  if (!lines || lines.length * lineHeight > maxHeight) return null;
+  return { lines, font, fontSize, lineHeight };
+}
+
 function fitCachedCanvasLabel(
   ctx: CanvasRenderingContext2D,
   cache: CanvasTextCache,
   key: string,
   label: string,
   maxWidth: number,
+  maxHeight: number,
   overflow: SectorTextStyle['overflow'],
   font: string,
   fontSize: number,
   fontWeight: SectorTextStyle['fontWeight'],
   fontFamily: string,
+  minFontSize: number,
+  maxLines: number,
 ): FittedCanvasLabel | null {
   const cached = cache.labels.get(key);
   if (cached !== undefined) return cached;
   let fitted: FittedCanvasLabel | null = null;
   if (maxWidth >= 12) {
-    const width = measureCachedText(ctx, cache, font, label);
-    if (width <= maxWidth) fitted = { label, font, fontSize };
-    else if (overflow === 'ellipsis') {
-      const shortened = ellipsizeCanvasLabel(ctx, cache, label, font, maxWidth);
-      if (shortened) fitted = { label: shortened, font, fontSize };
-    } else if (overflow === 'shrink') {
-      const shrunkSize = Math.max(fontSize * 0.55, fontSize * (maxWidth / width));
-      fitted = { label, font: `${fontWeight} ${shrunkSize}px ${fontFamily}`, fontSize: shrunkSize };
+    if (overflow === 'shrink-wrap') {
+      const minimum = Math.min(fontSize, Math.max(1, minFontSize));
+      const atMinimum = wrapFittedCanvasLabel(ctx, cache, label, maxWidth, maxHeight, maxLines, minimum, fontWeight, fontFamily);
+      if (atMinimum) {
+        let low = minimum;
+        let high = fontSize;
+        let best = atMinimum;
+        for (let attempt = 0; attempt < 9; attempt += 1) {
+          const candidate = (low + high) / 2;
+          const fittedCandidate = wrapFittedCanvasLabel(ctx, cache, label, maxWidth, maxHeight, maxLines, candidate, fontWeight, fontFamily);
+          if (fittedCandidate) {
+            best = fittedCandidate;
+            low = candidate;
+          } else {
+            high = candidate;
+          }
+        }
+        fitted = best;
+      }
+    } else {
+      const width = measureCachedText(ctx, cache, font, label);
+      if (width <= maxWidth) fitted = { lines: [label], font, fontSize, lineHeight: fontSize * CANVAS_TEXT_LINE_HEIGHT };
+      else if (overflow === 'ellipsis') {
+        const shortened = ellipsizeCanvasLabel(ctx, cache, label, font, maxWidth);
+        if (shortened) fitted = { lines: [shortened], font, fontSize, lineHeight: fontSize * CANVAS_TEXT_LINE_HEIGHT };
+      } else if (overflow === 'shrink') {
+        const shrunkSize = Math.max(fontSize * 0.55, fontSize * (maxWidth / width));
+        fitted = { lines: [label], font: `${fontWeight} ${shrunkSize}px ${fontFamily}`, fontSize: shrunkSize, lineHeight: shrunkSize * CANVAS_TEXT_LINE_HEIGHT };
+      }
     }
   }
   return cacheValue(cache.labels, key, fitted);
@@ -419,12 +471,27 @@ function drawLabels<T>(
     const probabilityFontSize = Math.max(1, fontSize * 0.72);
     const probabilityFont = `${text.fontWeight} ${probabilityFontSize}px ${text.fontFamily}`;
     const labelPositionRadius = labelRadius(text, center);
+    const innerLabelRadius = labelInnerRadius(text, center);
     const arcLength = (sector.sector.angle / 360) * Math.PI * 2 * labelPositionRadius;
+    const radialWidth = radialLabelWidth(text, labelPositionRadius, innerLabelRadius, center);
+    const tangentialWidth = Math.max(0, arcLength * 0.78);
     const maxWidth = text.maxWidth === undefined
       ? text.orientation === 'radial'
-        ? radialLabelWidth(text, labelPositionRadius, center)
-        : Math.max(0, arcLength * 0.78)
+        ? radialWidth
+        : tangentialWidth
       : (text.maxWidth / 100) * dimension;
+    const maxHeight = text.orientation === 'radial'
+      ? tangentialWidth * 0.76
+      : text.orientation === 'tangential'
+        ? radialWidth * 0.76
+        : Math.min(radialWidth, tangentialWidth) * 0.76;
+    const minFontSize = text.minFontSize === undefined
+      ? fontSize * 0.55
+      : canvasFontSize(text.minFontSize, dimension);
+    const requestedMaxLines = text.maxLines ?? 2;
+    const maxLines = Number.isFinite(requestedMaxLines)
+      ? Math.max(1, Math.min(6, Math.floor(requestedMaxLines)))
+      : 2;
     const labelKey = [
       dimension,
       sector.sector.item.id,
@@ -432,8 +499,12 @@ function drawLabels<T>(
       sector.sector.start,
       sector.sector.end,
       maxWidth,
+      maxHeight,
+      innerLabelRadius,
       font,
       text.overflow,
+      minFontSize,
+      maxLines,
     ].join('\u0001');
     const fittedLabel = fitCachedCanvasLabel(
       ctx,
@@ -441,11 +512,14 @@ function drawLabels<T>(
       labelKey,
       sector.sector.item.label,
       maxWidth,
+      showProbability ? Math.max(0, maxHeight - probabilityFontSize * 1.4) : maxHeight,
       text.overflow,
       font,
       fontSize,
       text.fontWeight,
       text.fontFamily,
+      minFontSize,
+      maxLines,
     );
     const fittedProbability = probability && fitCachedCanvasLabel(
       ctx,
@@ -453,16 +527,25 @@ function drawLabels<T>(
       `${labelKey}\u0001probability\u0001${probability}\u0001${probabilityFont}`,
       probability,
       maxWidth,
+      maxHeight,
       text.overflow,
       probabilityFont,
       probabilityFontSize,
       text.fontWeight,
       text.fontFamily,
+      Math.min(minFontSize, probabilityFontSize),
+      1,
     );
     if (!fittedLabel && !fittedProbability) continue;
     ctx.save();
     drawSectorPath(ctx, sector, center, center);
-    ctx.clip();
+    if (innerLabelRadius > 0) {
+      ctx.moveTo(center + innerLabelRadius, center);
+      ctx.arc(center, center, innerLabelRadius, 0, Math.PI * 2);
+      ctx.clip('evenodd');
+    } else {
+      ctx.clip();
+    }
     ctx.fillStyle = text.color;
     ctx.textAlign = textAnchor(text.align);
     ctx.textBaseline = 'middle';
@@ -473,27 +556,34 @@ function drawLabels<T>(
     const rotation = text.orientation === 'radial' ? sector.midAngle : text.orientation === 'tangential' ? sector.midAngle + 90 : 0;
     ctx.rotate((rotation * Math.PI) / 180);
     applyCanvasShadow(ctx, text.shadow, dimension);
-    const labelY = fittedProbability ? -probabilityFontSize * 0.48 : 0;
+    const labelY = fittedProbability ? -probabilityFontSize * 0.6 : 0;
     if (fittedLabel) {
       ctx.font = fittedLabel.font;
-      ctx.fillText(fittedLabel.label, 0, labelY, maxWidth);
-      if (text.strokeWidth > 0) {
-        ctx.strokeStyle = text.strokeColor;
-        ctx.lineWidth = (text.strokeWidth / 100) * dimension;
-        ctx.lineJoin = 'round';
-        ctx.strokeText(fittedLabel.label, 0, labelY, maxWidth);
+      const firstLineY = labelY - ((fittedLabel.lines.length - 1) * fittedLabel.lineHeight) / 2;
+      for (const [index, line] of fittedLabel.lines.entries()) {
+        const y = firstLineY + index * fittedLabel.lineHeight;
+        ctx.fillText(line, 0, y, maxWidth);
+        if (text.strokeWidth > 0) {
+          ctx.strokeStyle = text.strokeColor;
+          ctx.lineWidth = (text.strokeWidth / 100) * dimension;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(line, 0, y, maxWidth);
+        }
       }
     }
     if (fittedProbability) {
       ctx.globalAlpha = 0.86;
       ctx.font = fittedProbability.font;
-      const probabilityY = fittedLabel ? Math.max(fontSize, probabilityFontSize) * 0.54 : 0;
-      ctx.fillText(fittedProbability.label, 0, probabilityY, maxWidth);
-      if (text.strokeWidth > 0) {
-        ctx.strokeStyle = text.strokeColor;
-        ctx.lineWidth = (text.strokeWidth / 100) * dimension;
-        ctx.lineJoin = 'round';
-        ctx.strokeText(fittedProbability.label, 0, probabilityY, maxWidth);
+      const probabilityY = fittedLabel ? labelY + (fittedLabel.lines.length * fittedLabel.lineHeight) / 2 + probabilityFontSize * 0.65 : 0;
+      for (const [index, line] of fittedProbability.lines.entries()) {
+        const y = probabilityY + index * fittedProbability.lineHeight;
+        ctx.fillText(line, 0, y, maxWidth);
+        if (text.strokeWidth > 0) {
+          ctx.strokeStyle = text.strokeColor;
+          ctx.lineWidth = (text.strokeWidth / 100) * dimension;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(line, 0, y, maxWidth);
+        }
       }
     }
     ctx.restore();

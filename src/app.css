@@ -709,7 +709,7 @@ h1 span { color: #a78bfa; }
 .primaryButton { color: #fff; background: linear-gradient(130deg, #7c3aed, #a21caf); box-shadow: 0 8px 20px rgba(124,58,237,.23); }
 .secondaryButton { color: #d8b4fe; background: rgba(124,58,237,.12); border: 1px solid rgba(167,139,250,.36); }
 .selectField { display: grid; gap: 7px; color: #cbd5e1; font-size: .72rem; font-weight: 700; }
-select, .soundSection input, .mediaPicker input, .themeGrid input[type="number"] { width: 100%; border: 1px solid rgba(148,163,184,.24); border-radius: 9px; outline: none; background: #0b1222; color: #e2e8f0; }
+select, .soundSection input, .mediaPicker input, .themeGrid input[type="number"], .numberField input[type="number"] { width: 100%; border: 1px solid rgba(148,163,184,.24); border-radius: 9px; outline: none; background: #0b1222; color: #e2e8f0; }
 select { padding: 9px 10px; }
 .topField { margin-top: 12px; }
 .fieldHint { margin: 7px 0 0; color: #64748b; font-size: .67rem; line-height: 1.45; }
@@ -734,8 +734,10 @@ select { padding: 9px 10px; }
 .compactRange { margin-top: 0; font-size: .66rem; }
 .themeGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; }
 .themeGrid label { display: grid; gap: 5px; color: #94a3b8; font-size: .63rem; font-weight: 700; }
+.numberField { display: grid; gap: 5px; color: #94a3b8; font-size: .63rem; font-weight: 700; }
+.numberField input[type="number"] { min-height: 30px; font-variant-numeric: tabular-nums; }
 .themeGrid input[type="color"] { width: 100%; height: 31px; padding: 2px; border: 1px solid rgba(148,163,184,.24); border-radius: 8px; background: #0b1222; }
-.themeGrid input[type="number"] { padding: 7px 8px; font-size: .7rem; }
+.themeGrid input[type="number"], .numberField input[type="number"] { padding: 7px 8px; font-size: .7rem; }
 .mediaPicker { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; margin-top: 12px; }
 .mediaPicker > label:first-child { display: grid; gap: 6px; color: #cbd5e1; font-size: .68rem; font-weight: 700; }
 .mediaPicker input:not([type="file"]) { padding: 8px 9px; font-size: .68rem; }
@@ -1081,9 +1083,9 @@ h1 span {
 .secondaryButton { border: 1px solid rgba(167,139,250,.3); color: #c6b9eb; background: rgba(124,58,237,.075); }
 .secondaryButton:not(:disabled):hover { border-color: rgba(167,139,250,.55); background: rgba(124,58,237,.12); }
 .selectField, .rangeField, .asyncServer, .toggleGrid, .toggleLine { color: #abb1bd; font-size: .64rem; }
-select, .soundSection input, .mediaPicker input, .themeGrid input[type="number"] { border-color: var(--line); border-radius: 7px; background: #07090d; color: #d9dce3; transition: border-color .2s ease, box-shadow .2s ease; }
+select, .soundSection input, .mediaPicker input, .themeGrid input[type="number"], .numberField input[type="number"] { border-color: var(--line); border-radius: 7px; background: #07090d; color: #d9dce3; transition: border-color .2s ease, box-shadow .2s ease; }
 select { min-height: 38px; padding: 9px 10px; }
-select:focus, .soundSection input:focus, .mediaPicker input:focus, .themeGrid input[type="number"]:focus, .itemEditor input:focus { border-color: rgba(167,139,250,.62); box-shadow: 0 0 0 3px rgba(124,58,237,.1); }
+select:focus, .soundSection input:focus, .mediaPicker input:focus, .themeGrid input[type="number"]:focus, .numberField input[type="number"]:focus, .itemEditor input:focus { border-color: rgba(167,139,250,.62); box-shadow: 0 0 0 3px rgba(124,58,237,.1); }
 .fieldHint, .sectionLead { color: #69707e; }
 .segmented { border: 1px solid rgba(255,255,255,.045); border-radius: 8px; background: #06080c; }
 .segmented button { color: #767d8b; }
@@ -1096,6 +1098,7 @@ select:focus, .soundSection input:focus, .mediaPicker input:focus, .themeGrid in
 .controls input[type="range"]::-moz-range-progress { height: 3px; border-radius: 99px; background: #7861b5; }
 .controls input[type="range"]::-moz-range-thumb { width: 11px; height: 11px; border: 2px solid #090b10; border-radius: 50%; background: #c4b5fd; }
 .themeGrid label { color: #858c9a; font-size: .56rem; }
+.numberField { color: #858c9a; font-size: .64rem; }
 .themeGrid input[type="color"] { border-color: var(--line); border-radius: 7px; background: #07090d; }
 .fileButton { border-color: rgba(167,139,250,.28); border-radius: 7px; color: #c7bbeb; background: rgba(124,58,237,.075); }
 .denseActions { color: #69707e; font-size: .59rem; }
