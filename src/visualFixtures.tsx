@@ -31,6 +31,7 @@ function Fixtures() {
       <Fixture title="Text orientations, stroke and shadow"><Wheel items={baseItems.map((item, index) => ({ ...item, text: { orientation: (['horizontal', 'radial', 'tangential'] as const)[index % 3], fontSize: 3.7, strokeColor: '#312e81', strokeWidth: .35, shadow: { color: '#020617', blur: .7, offsetX: .25, offsetY: .25 } } }))} size={260} /></Fixture>
       <Fixture title="Image fit, transform and opacity"><Wheel items={baseItems.map((item, index) => ({ ...item, image: { src: image, fit: (['cover', 'contain', 'stretch'] as const)[index % 3], opacity: .18 + index * .1, scale: .85 + index * .06, rotation: index * 12, offsetX: index - 2, offsetY: 2 - index } }))} size={260} /></Fixture>
       <Fixture title="Controlled highlight layer"><Wheel items={baseItems} size={260} highlightedItemId={highlighted} highlightStyle={{ color: '#fef08a', opacity: .3, blendMode: 'screen' }} onSectorHover={(sector) => setHighlighted(sector?.item.id)} /></Fixture>
+      <Fixture title="Debug radii and text areas"><Wheel items={baseItems.map((item, index) => ({ ...item, text: { orientation: (['radial', 'tangential', 'horizontal'] as const)[index % 3], innerRadius: index % 2 ? .28 : 0, radius: .5 + index * .06 } }))} size={260} debug /></Fixture>
       <CollapseFixture />
       <Fixture title="Dense 100-sector LOD"><Wheel items={denseItems} size={260} minLabelAngle={8} accessibleItemList={false} /></Fixture>
     </div>

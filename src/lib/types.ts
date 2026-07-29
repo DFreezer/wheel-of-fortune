@@ -136,6 +136,15 @@ export interface WheelCanvasDrawEvent {
   detail: 'full' | 'transition' | 'dense';
 }
 
+/**
+ * Draws Canvas layout guides for wheel authors. The guides are visual only
+ * and do not affect sector geometry, hit testing, or winner selection.
+ */
+export interface WheelDebugConfig {
+  /** Draw sector radii and the available text layout area. Default: false. */
+  enabled: boolean;
+}
+
 export interface LandingConfig {
   mode?: 'center' | 'random';
   /** Reserved fraction at each sector edge in random mode, from 0 to < 0.5. */
@@ -299,6 +308,8 @@ export interface WheelProps<T = unknown> {
   minLabelAngle?: number;
   /** Draw each sector's normalized chance below its label. Defaults to false. */
   showProbability?: boolean;
+  /** Canvas layout guides. Pass `true` to draw radii and text areas. */
+  debug?: boolean | Partial<WheelDebugConfig>;
   /** Optional visual emphasis drawn by a dedicated Canvas layer. */
   highlightedItemId?: string;
   /** Visual treatment for `highlightedItemId`. */

@@ -16,6 +16,7 @@ export type {
   StrokeStyleOptions,
   WheelController,
   WheelCanvasDrawEvent,
+  WheelDebugConfig,
   WheelHighlightStyle,
   WheelItem,
   WheelPointerPosition,

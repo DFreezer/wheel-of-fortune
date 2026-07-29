@@ -22,6 +22,7 @@ import type {
   SpinResult,
   ServerWinner,
   WheelController,
+  WheelDebugConfig,
   WheelItem,
   WheelProps,
   WheelSectorEvent,
@@ -78,6 +79,10 @@ const DEFAULT_IDLE_ANIMATION: IdleAnimationConfig = {
   scale: 1,
 };
 
+const DEFAULT_DEBUG: WheelDebugConfig = {
+  enabled: false,
+};
+
 const ATTACH = '__wheelOfFortuneAttach';
 
 interface WheelHost {
@@ -127,6 +132,12 @@ function resolveItemsTransition(config?: boolean | Partial<ItemsTransitionConfig
   if (config === false) return { ...DEFAULT_ITEMS_TRANSITION, enabled: false, mode: 'none' };
   if (config === true || config === undefined) return DEFAULT_ITEMS_TRANSITION;
   return { ...DEFAULT_ITEMS_TRANSITION, ...config };
+}
+
+function resolveDebug(config?: boolean | Partial<WheelDebugConfig>): WheelDebugConfig {
+  if (config === true) return { enabled: true };
+  if (!config) return DEFAULT_DEBUG;
+  return { ...DEFAULT_DEBUG, ...config };
 }
 
 function membershipChanged<T>(previous: readonly WheelItem<T>[], next: readonly WheelItem<T>[]): boolean {
@@ -218,6 +229,7 @@ export function Wheel<T = unknown>({
   idleAnimation,
   minLabelAngle = 7,
   showProbability = false,
+  debug,
   highlightedItemId,
   highlightStyle,
   onCanvasDraw,
@@ -281,6 +293,8 @@ export function Wheel<T = unknown>({
   const theme = useMemo(() => resolveTheme(partialTheme), [themeKey]);
   const idleKey = JSON.stringify(idleAnimation ?? false);
   const resolvedIdleAnimation = useMemo(() => resolveIdleAnimation(idleAnimation), [idleKey]);
+  const debugKey = JSON.stringify(debug ?? false);
+  const resolvedDebug = useMemo(() => resolveDebug(debug), [debugKey]);
   const sectors = useMemo(() => createSectors(displayItems), [displayItems]);
   const sectorsRef = useRef(sectors);
   const canvasCollapsePolicy = itemsTransitionState?.config.mode === 'collapse'
@@ -312,6 +326,7 @@ export function Wheel<T = unknown>({
     idleAnimation,
     minLabelAngle,
     showProbability,
+    debug,
     highlightedItemId,
     highlightStyle,
     onCanvasDraw,
@@ -797,6 +812,7 @@ export function Wheel<T = unknown>({
       theme,
       minLabelAngle,
       showProbability,
+      debug: resolvedDebug,
       highlightedItemId,
       highlightStyle,
       onCanvasDraw,
@@ -849,6 +865,7 @@ export function Wheel<T = unknown>({
                   theme={theme}
                   minLabelAngle={minLabelAngle}
                   showProbability={showProbability}
+                  debug={resolvedDebug}
                   duration={itemsTransitionState.config.duration}
                   easing={itemsTransitionState.config.easing}
                   detail={canvasCollapsePolicy === 'full' ? 'full' : 'transition'}

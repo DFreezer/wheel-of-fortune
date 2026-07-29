@@ -120,6 +120,19 @@ not fit vertically, only as far as `minFontSize` (both defaults are 55% of
 Set `innerRadius` (0–1) to reserve space from the wheel centre, such as for a
 large centre element; text is fitted and clipped outside that inner boundary.
 
+## Debug layout guides
+
+Pass `debug` to inspect the Canvas geometry while configuring a wheel:
+
+```tsx
+<Wheel items={items} debug />
+```
+
+The cyan guides show each sector's radial axis and configured text `radius`;
+pink arcs show `innerRadius`; yellow rectangles show the available text area
+after `orientation`, `align`, `maxWidth`, and offsets are applied. Debug mode is
+visual only and does not change hit testing, probabilities, or spin results.
+
 ## Asynchronous server result
 
 Use `resolveWinner` when the authoritative result should be requested immediately after the user clicks. While the promise is pending, `getState()` returns `status: 'resolving'`; item updates are deferred and `cancel()` propagates through `AbortSignal`.
