@@ -471,7 +471,24 @@ function fitCachedCanvasLabel(
   minFontSize: number,
   maxLines: number,
 ): FittedCanvasLabel | null {
-  const cached = cache.labels.get(key);
+  // The same sector label can be fitted into different vertical space when
+  // optional content (currently the probability) is toggled. Keep every fit
+  // constraint in the cache key so a layout computed for the full height
+  // cannot be reused after that height has been reduced.
+  const fitKey = [
+    key,
+    label,
+    maxWidth,
+    maxHeight,
+    overflow,
+    font,
+    fontSize,
+    fontWeight,
+    fontFamily,
+    minFontSize,
+    maxLines,
+  ].join('\u0001');
+  const cached = cache.labels.get(fitKey);
   if (cached !== undefined) return cached;
   let fitted: FittedCanvasLabel | null = null;
   if (maxWidth >= 12) {
@@ -506,7 +523,7 @@ function fitCachedCanvasLabel(
       }
     }
   }
-  return cacheValue(cache.labels, key, fitted);
+  return cacheValue(cache.labels, fitKey, fitted);
 }
 
 function drawLabels<T>(
